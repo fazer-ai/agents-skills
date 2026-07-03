@@ -1,0 +1,85 @@
+# Platform-neutral production stack for fazer.ai agents (Portainer / EasyPanel / plain `docker compose`
+# on a VM). Coolify has its own file (docker-compose.coolify.yml, magic-vars); THIS file reads plain
+# env vars from a .env you generate with `bun scripts/gen-onboarding-env.ts` (writes every secret/URL
+# below, consistently). TLS + reverse proxy are EXTERNAL (Caddy/Traefik/Nginx Proxy Manager): this
+# stack only publishes the app's HTTP port on the host — terminate TLS in front of it.
+#
+# TWO database roles by design (docs/deploy.md, load-bearing): the SUPERUSER (POSTGRES_USER, the
+# postgres container's owner) runs db-bootstrap + migrations; the NON-superuser runtime role (encoded
+# in DATABASE_URL, created by db-bootstrap from that URL) is what the server runs as, so Postgres RLS
+# isolation holds. The boot guard hard-crashes if the runtime role is privileged.
+#
+# SINGLE replica by construction (the scheduler / debounce / webhook / alert workers + realtime
+# pub/sub are single-process). Do NOT scale `agents` to >1 here. To add web replicas, run the
+# extras with SCHEDULER_WORKER_ENABLED/WEBHOOK_WORKER_ENABLED/DEBOUNCE_WORKER_ENABLED/
+# ALERT_WORKER_ENABLED=false and keep exactly one leader with them on (docs/deploy.md §4).
+
+services:
+  agents:
+    # Edition-driven: Free (default, public image) vs Pro (set AGENTS_IMAGE to the private
+    # Harbor image, project `agents`, after `docker login` — hub: create_registry_credential, per-user).
+    # PLACEHOLDER: the public Free image is not published yet — swap `agents` once it exists.
+    image: ${AGENTS_IMAGE:-ghcr.io/fazer-ai/agents:latest}
+    pull_policy: always
+    restart: always
+    # NOTE: no `command` here on purpose — the image's default entrypoint already runs, in order:
+    # db-bootstrap.ts (idempotent runtime-role provisioning) → prisma migrate deploy → serve
+    # interpreted (bun src/index.ts). Overriding risks drifting from that contract.
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - PUBLIC_URL=${PUBLIC_URL}
+      - CDN_URL=${PUBLIC_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Superuser/owner connection — migrations + bootstrap only. Its user/password MUST match the
+      # postgres container's POSTGRES_USER/POSTGRES_PASSWORD below.
+      - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL}
+      # Runtime role — NON-superuser, NON-bypassrls (db-bootstrap creates it from this URL). RLS holds.
+      - DATABASE_URL=${DATABASE_URL}
+      # Checkpointer pool — MUST be the runtime (non-superuser) role, never the migration URL.
+      - LANGGRAPH_DATABASE_URL=${LANGGRAPH_DATABASE_URL}
+      # Persist uploaded branding (logo/favicon) + generated quote PDFs on the `storage` volume
+      # (mounted below). The defaults (./data/*) live on the ephemeral container FS and vanish on
+      # every redeploy.
+      - BRANDING_STORAGE_DIR=/app/storage/branding
+      - QUOTES_STORAGE_DIR=/app/storage/quotes
+    ports:
+      # Host:container. Put a TLS-terminating reverse proxy in front; in untrusted networks bind to
+      # 127.0.0.1 (set APP_PORT=127.0.0.1:3000) or firewall the port.
+      - '${APP_PORT:-3000}:3000'
+    volumes:
+      - 'storage:/app/storage'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health || exit 1']
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    # pgvector image (NOT plain postgres): the schema needs CREATE EXTENSION vector. pg17 matches the
+    # validated isolation spike. Not published to the host — only the app reaches it over the network.
+    image: 'pgvector/pgvector:pg17'
+    restart: always
+    environment:
+      - POSTGRES_DB=${DATABASE_NAME:-secretaria_v4_db}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -h localhost -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+volumes:
+  storage:
+  postgres:

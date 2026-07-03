@@ -1,0 +1,11 @@
+{
+  "name": "agents",
+  "version": "1.0.2",
+  "description": "Skills do fazer.ai agents: onboarding (subir do zero num VPS), desenvolvimento (mexer no código) e operação (debugar em produção).",
+  "author": {
+    "name": "fazer.ai",
+    "url": "https://fazer.ai"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://app.fazer.ai"
+}

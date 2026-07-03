@@ -1,0 +1,139 @@
+# Chatwoot for fazer.ai: GENERIC flavor (Portainer / EasyPanel / Dokploy / plain Docker).
+#
+# ONE file, BOTH editions, selected by env (see ./README.md):
+#   - OSS (no hub subscription): defaults, our public `ghcr.io/fazer-ai/chatwoot` fork, no Baileys.
+#   - Pro (hub subscription): set CHATWOOT_IMAGE to the Harbor image AND COMPOSE_PROFILES=pro
+#     (adds the Baileys WhatsApp provider). Requires `docker login harbor.fazer.ai` with the
+#     license registry credential (hub: generate_install_script).
+#
+# Secrets come from a .env you fill in (see ./.env.example); Coolify generates those automatically,
+# so it has its own file (./docker-compose.coolify.yml). TLS + reverse proxy are EXTERNAL: this stack
+# only publishes Chatwoot's HTTP port on the host (default 127.0.0.1:3001); terminate TLS in front
+# (the fazer.ai agents bundled Caddy can front chatwoot.<domain> at it; see the agents-onboarding skill).
+#
+#   cp .env.example .env   # fill every CHANGE_ME, then:
+#   docker compose up -d                         # OSS
+#   COMPOSE_PROFILES=pro docker compose up -d     # Pro (after the Harbor login)
+
+x-chatwoot-env: &chatwoot-env
+  NODE_ENV: production
+  RAILS_ENV: production
+  INSTALLATION_ENV: docker
+  DEFAULT_LOCALE: '${CHATWOOT_LOCALE:-en}'
+  LOG_LEVEL: '${RAILS_LOG_LEVEL:-info}'
+  FRONTEND_URL: '${CHATWOOT_URL}'
+  INTERNAL_HOST_URL: 'http://chatwoot:3000'
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: '5432'
+  POSTGRES_USERNAME: '${POSTGRES_USER}'
+  POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+  POSTGRES_DATABASE: '${POSTGRES_DB:-chatwoot_production}'
+  SECRET_KEY_BASE: '${SECRET_KEY_BASE}'
+  REDIS_URL: 'redis://redis:6379'
+  REDIS_PASSWORD: '${REDIS_PASSWORD}'
+  # Pro-only (Baileys WhatsApp): harmless on OSS (no Baileys inbox can be created there).
+  BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME: '${BAILEYS_CLIENT_NAME:-Chatwoot}'
+  BAILEYS_PROVIDER_DEFAULT_URL: 'http://baileys-api:3025'
+  BAILEYS_PROVIDER_DEFAULT_API_KEY: '${BAILEYS_DEFAULT_API_KEY:-}'
+  BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL: 'true'
+
+services:
+  chatwoot:
+    # OSS default (our fork); for Pro set CHATWOOT_IMAGE=harbor.fazer.ai/chatwoot/fazer-ai/chatwoot-pro:latest
+    image: '${CHATWOOT_IMAGE:-ghcr.io/fazer-ai/chatwoot:latest}'
+    pull_policy: always
+    volumes:
+      - 'storage:/app/storage'
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment: *chatwoot-env
+    entrypoint: docker/entrypoints/rails.sh
+    command:
+      - sh
+      - '-c'
+      - 'bundle exec rails db:chatwoot_prepare && exec bundle exec rails s -p 3000 -b 0.0.0.0'
+    ports:
+      # Host:container. Front with your own TLS-terminating reverse proxy; bound to localhost by default.
+      - '${CHATWOOT_PORT:-127.0.0.1:3001}:3000'
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- --header="Accept: text/html" http://127.0.0.1:3000/ || exit 1']
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  sidekiq:
+    image: '${CHATWOOT_IMAGE:-ghcr.io/fazer-ai/chatwoot:latest}'
+    pull_policy: always
+    volumes:
+      - 'storage:/app/storage'
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment: *chatwoot-env
+    command: ['bundle', 'exec', 'sidekiq', '-C', 'config/sidekiq.yml']
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'ps aux | grep "[s]idekiq" || exit 1']
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    # pgvector (Chatwoot 4.x "Captain" AI uses the vector extension). Public image, no auth needed.
+    image: '${POSTGRES_IMAGE:-pgvector/pgvector:pg16}'
+    restart: always
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+    environment:
+      POSTGRES_DB: '${POSTGRES_DB:-chatwoot_production}'
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h localhost -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+  redis:
+    image: 'redis:alpine'
+    restart: always
+    command: ['sh', '-c', 'redis-server --requirepass "$${REDIS_PASSWORD}"']
+    volumes:
+      - 'redis:/data'
+    environment:
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -h localhost -p 6379 -a $${REDIS_PASSWORD} ping | grep -q PONG']
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+  # Pro only: the Baileys WhatsApp provider. Starts ONLY with COMPOSE_PROFILES=pro.
+  baileys-api:
+    image: '${BAILEYS_IMAGE:-ghcr.io/fazer-ai/baileys-api:latest}'
+    profiles: ['pro']
+    pull_policy: always
+    volumes:
+      - 'storage:/app/storage'
+    environment:
+      NODE_ENV: production
+      REDIS_URL: 'redis://redis:6379'
+      REDIS_PASSWORD: '${REDIS_PASSWORD}'
+      LOG_LEVEL: '${BAILEYS_API_LOG_LEVEL:-info}'
+      BAILEYS_PROVIDER_DEFAULT_API_KEY: '${BAILEYS_DEFAULT_API_KEY}'
+    command: ['sh', '-c', 'bun manage-api-keys create user $${BAILEYS_DEFAULT_API_KEY} && bun start']
+    depends_on:
+      redis: { condition: service_healthy }
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3025/status || exit 1']
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+volumes:
+  storage:
+  postgres:
+  redis:

@@ -1,0 +1,73 @@
+services:
+  agents:
+    # Edition-driven: Free (default, public image) vs Pro — for Pro, set the AGENTS_IMAGE env on
+    # the Coolify service to the private Harbor image (project `agents`) AND register the Harbor
+    # registry credential in Coolify (hub: create_registry_credential, per-user, same as Chatwoot Pro).
+    # PLACEHOLDER: the public Free image is not published yet — swap `agents` once it exists.
+    image: '${AGENTS_IMAGE:-ghcr.io/fazer-ai/agents:latest}'
+    pull_policy: always
+    volumes:
+      - 'storage:/app/storage'
+    environment:
+      - SERVICE_URL_AGENTS
+      - NODE_ENV=production
+      - PORT=${PORT:-3000}
+      - PUBLIC_URL=${SERVICE_URL_AGENTS}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - JWT_SECRET=${SERVICE_PASSWORD_64_JWTSECRET}
+      - ENCRYPTION_KEY=${SERVICE_PASSWORD_64_ENCRYPTIONKEY}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - CDN_URL=${SERVICE_URL_AGENTS}
+      # NOTE: opt this onboarding / self-hosted deploy into MCP Dynamic Client Registration so the
+      # operator's AI agent (Claude Code / Codex) can `mcp login` to THIS instance's MCP — OAuth DCR
+      # mints the client and the metadata then publishes `registration_endpoint`. The app code default
+      # is OFF (closed/hardened, see docs/mcp.md); this agent-operated deploy turns it ON deliberately.
+      - MCP_DCR_ENABLED=true
+      # Persist uploaded branding (logo/favicon) + generated quote PDFs on the `storage` volume.
+      # The defaults (./data/*) live on the ephemeral container FS and vanish on every redeploy.
+      - BRANDING_STORAGE_DIR=/app/storage/branding
+      - QUOTES_STORAGE_DIR=/app/storage/quotes
+      # NOTE: TWO roles by design. The superuser (SERVICE_USER_DBUSER, also the postgres
+      # container's owner) runs migrations + bootstrap. The app role (SERVICE_USER_APPDBUSER,
+      # created by db-bootstrap.ts) is NON-superuser/NON-bypassrls so RLS isolation holds — the
+      # boot guard refuses to start the server on a privileged runtime role.
+      - 'MIGRATION_DATABASE_URL=postgres://${SERVICE_USER_DBUSER}:${SERVICE_PASSWORD_64_DBPASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-secretaria_v4_db}'
+      - 'DATABASE_URL=postgres://${SERVICE_USER_APPDBUSER}:${SERVICE_PASSWORD_64_APPDBPASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-secretaria_v4_db}'
+      - 'LANGGRAPH_DATABASE_URL=postgres://${SERVICE_USER_APPDBUSER}:${SERVICE_PASSWORD_64_APPDBPASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-secretaria_v4_db}'
+    # NOTE: the boot sequence (provision runtime role -> migrate as owner -> run the interpreted
+    # server) is the image CMD in the Dockerfile. Do NOT override `command` here: it once drifted to
+    # a stale `./server` (from the pre-interpreted `bun build --compile` era) and crash-looped on
+    # `exec: ./server: not found` while the image CMD stayed correct.
+    restart: always
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'wget -qO- http://localhost:3000/api/health'
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    # pgvector image (NOT plain postgres): the schema needs CREATE EXTENSION vector. pg17 matches
+    # the validated isolation spike.
+    image: 'pgvector/pgvector:pg17'
+    restart: always
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+    environment:
+      - POSTGRES_DB=${DATABASE_NAME:-secretaria_v4_db}
+      - POSTGRES_USER=${SERVICE_USER_DBUSER}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_64_DBPASSWORD}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -h localhost -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
+      interval: 20s
+      timeout: 20s
+      retries: 10
+
+volumes:
+  storage:
+  postgres:

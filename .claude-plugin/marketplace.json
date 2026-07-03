@@ -1,0 +1,89 @@
+{
+  "name": "agents",
+  "description": "Skills do fazer.ai agents: onboarding, desenvolvimento e operação.",
+  "owner": {
+    "name": "fazer.ai",
+    "url": "https://fazer.ai"
+  },
+  "plugins": [
+    {
+      "name": "agents",
+      "description": "Skills do fazer.ai agents: onboarding (subir do zero num VPS), desenvolvimento (mexer no código) e operação (debugar em produção).",
+      "descriptions": {
+        "en": "fazer.ai agents skills: onboarding (zero-to-agent on a VPS), development (work on the code), and operation (debug a live instance).",
+        "pt-BR": "Skills do fazer.ai agents: onboarding (subir do zero num VPS), desenvolvimento (mexer no código) e operação (debugar em produção)."
+      },
+      "version": "1.0.2",
+      "source": "./",
+      "category": "devops",
+      "tags": [
+        "onboarding",
+        "agents",
+        "chatwoot",
+        "langfuse",
+        "vps",
+        "deploy",
+        "coolify",
+        "portainer",
+        "ia",
+        "agente",
+        "dev",
+        "operacao"
+      ],
+      "available_skills": [
+        {
+          "name": "agents-onboarding",
+          "description": "Provisiona VPS + DNS, faz deploy de Chatwoot + fazer.ai agents + Langfuse com TLS, roda o /setup, configura branding, importa o agente via MCP, pluga o Agent Bot do Chatwoot e valida ponta a ponta.",
+          "descriptions": {
+            "en": "Provisions VPS + DNS, deploys Chatwoot + fazer.ai agents + Langfuse with TLS, runs /setup, configures branding, imports the agent via MCP, wires the Chatwoot Agent Bot, and validates end-to-end.",
+            "pt-BR": "Provisiona VPS + DNS, faz deploy de Chatwoot + fazer.ai agents + Langfuse com TLS, roda o /setup, configura branding, importa o agente via MCP, pluga o Agent Bot do Chatwoot e valida ponta a ponta."
+          },
+          "category": "devops",
+          "tags": [
+            "onboarding",
+            "agents",
+            "chatwoot",
+            "langfuse",
+            "vps",
+            "coolify",
+            "portainer"
+          ]
+        },
+        {
+          "name": "agents-dev",
+          "description": "Modo desenvolvedor: clona o repo (Free público ou Pro via git proxy do hub), orienta nos invariantes e na separação Free/Full, conduz a implementação com bun check e ajuda a gerar a própria imagem de deploy.",
+          "descriptions": {
+            "en": "Developer mode: clones the repo (public Free or Pro via the hub git proxy), guides the invariants and the Free/Full split, drives implementation with bun check, and helps build your own deploy image.",
+            "pt-BR": "Modo desenvolvedor: clona o repo (Free público ou Pro via git proxy do hub), orienta nos invariantes e na separação Free/Full, conduz a implementação com bun check e ajuda a gerar a própria imagem de deploy."
+          },
+          "category": "development",
+          "tags": [
+            "agents",
+            "desenvolvimento",
+            "dev",
+            "codigo",
+            "free",
+            "pro"
+          ]
+        },
+        {
+          "name": "agents-operation",
+          "description": "Modo operação: debuga uma instância em produção (conversa no Chatwoot + ExecutionLog + traces no Langfuse), reproduz no playground, ajusta o agente e re-valida, com toda mutação aprovada.",
+          "descriptions": {
+            "en": "Operation mode: debugs a live instance (Chatwoot conversation + ExecutionLog + Langfuse traces), reproduces in the playground, adjusts the agent and re-validates, every mutation approved.",
+            "pt-BR": "Modo operação: debuga uma instância em produção (conversa no Chatwoot + ExecutionLog + traces no Langfuse), reproduz no playground, ajusta o agente e re-valida, com toda mutação aprovada."
+          },
+          "category": "operations",
+          "tags": [
+            "agents",
+            "operacao",
+            "producao",
+            "debug",
+            "langfuse",
+            "chatwoot"
+          ]
+        }
+      ]
+    }
+  ]
+}

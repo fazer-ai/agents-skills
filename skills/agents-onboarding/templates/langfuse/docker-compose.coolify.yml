@@ -1,0 +1,189 @@
+# Langfuse v3 (self-hosted) for fazer.ai: COOLIFY flavor.
+#
+# WHY THIS FILE EXISTS
+# The Langfuse one-click/Coolify template ships the S3 env var NAMES but leaves the
+# credentials + endpoint EMPTY and bundles NO object-storage service. Langfuse v3 REQUIRES an
+# S3-compatible blob store for trace ingestion: every event JSON is uploaded to S3 BEFORE it is
+# queued to ClickHouse. With empty creds the AWS SDK throws "Could not load credentials from any
+# providers", the upload fails, and `POST /api/public/ingestion` returns HTTP 500, so NO trace is
+# ever stored. The trap: `GET /api/public/projects` reads Postgres only, returns 200, and a naive
+# "connection test" PASSES, hiding the broken ingestion. This compose bundles MinIO and wires all
+# three S3 families (event / media / batch-export) to it.
+#
+# MAGIC VARS: Coolify auto-generates every `SERVICE_*` value on first deploy (incl.
+# SERVICE_USER_MINIO / SERVICE_PASSWORD_MINIO) and injects it. Never hardcode a secret here.
+#
+# Generic / Portainer / EasyPanel / Dokploy (manual env): use ./docker-compose.yml + ./.env.example.
+
+x-langfuse-env: &langfuse-env
+  # ── core ──
+  DATABASE_URL: 'postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/${POSTGRES_DB:-langfuse-db}'
+  SALT: '${SERVICE_PASSWORD_SALT}'
+  ENCRYPTION_KEY: '${SERVICE_PASSWORD_64_LANGFUSE}'
+  NEXTAUTH_SECRET: '${SERVICE_BASE64_NEXTAUTHSECRET}'
+  NEXTAUTH_URL: '${SERVICE_URL_LANGFUSE}'
+  TELEMETRY_ENABLED: 'false'
+  LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: 'false'
+  # Agent flips this: 'false' for the initial deploy (so the user can self-register in the browser),
+  # then 'true' after the project + keys are seeded, to close signup. Default 'true' (secure) if unset.
+  AUTH_DISABLE_SIGNUP: '${AUTH_DISABLE_SIGNUP:-true}'
+  HOSTNAME: 0.0.0.0
+  # ── clickhouse ──
+  CLICKHOUSE_MIGRATION_URL: 'clickhouse://clickhouse:9000'
+  CLICKHOUSE_URL: 'http://clickhouse:8123'
+  CLICKHOUSE_USER: '${SERVICE_USER_CLICKHOUSE}'
+  CLICKHOUSE_PASSWORD: '${SERVICE_PASSWORD_CLICKHOUSE}'
+  CLICKHOUSE_CLUSTER_ENABLED: 'false'
+  # ── redis ──
+  REDIS_HOST: redis
+  REDIS_PORT: '6379'
+  REDIS_AUTH: '${SERVICE_PASSWORD_REDIS}'
+  # ── blob storage (MinIO): THE PIECE THE ONE-CLICK OMITTED ──
+  LANGFUSE_USE_AZURE_BLOB: 'false'
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: 'http://minio:9000'
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: '${SERVICE_USER_MINIO}'
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: '${SERVICE_PASSWORD_MINIO}'
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: 'true'
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: 'http://minio:9000'
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: '${SERVICE_USER_MINIO}'
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: '${SERVICE_PASSWORD_MINIO}'
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: 'true'
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_BATCH_EXPORT_ENABLED: 'false'
+  LANGFUSE_S3_BATCH_EXPORT_BUCKET: langfuse
+  LANGFUSE_S3_BATCH_EXPORT_REGION: auto
+  LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: 'http://minio:9000'
+  LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: '${SERVICE_USER_MINIO}'
+  LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: '${SERVICE_PASSWORD_MINIO}'
+  LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: 'true'
+  LANGFUSE_S3_BATCH_EXPORT_PREFIX: exports/
+  # ── ingestion tuning (matches the one-click defaults) ──
+  LANGFUSE_INGESTION_QUEUE_DELAY_MS: '1'
+  LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS: '1000'
+  # ── email (optional; blank = console only) ──
+  EMAIL_FROM_ADDRESS: admin@example.com
+  SMTP_CONNECTION_URL: ''
+
+services:
+  langfuse:
+    image: 'langfuse/langfuse:3'
+    environment:
+      <<: *langfuse-env
+      # ── headless seed (agent-driven; empty = no seed) ──
+      # The agent provisions EVERYTHING on the first boot: a user (org owner) + org + project + key pair,
+      # with AUTH_DISABLE_SIGNUP=true from the start (default above), so signup is never open. The operator
+      # SIGNS IN (never signs up) with the seeded email + password and changes it; the agent already holds
+      # the keys (it generated them) and wires them into fazer.ai agents. One deploy, no redeploy, no open
+      # signup window; this is Langfuse's own recommended headless-init pattern. See references/05-langfuse.md.
+      # On Coolify the agent sets these via the service env editor / API before the (single) deploy.
+      LANGFUSE_INIT_ORG_ID: '${LANGFUSE_INIT_ORG_ID:-}'
+      LANGFUSE_INIT_ORG_NAME: '${LANGFUSE_INIT_ORG_NAME:-}'
+      LANGFUSE_INIT_PROJECT_ID: '${LANGFUSE_INIT_PROJECT_ID:-}'
+      LANGFUSE_INIT_PROJECT_NAME: '${LANGFUSE_INIT_PROJECT_NAME:-}'
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: '${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}'
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: '${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}'
+      LANGFUSE_INIT_USER_EMAIL: '${LANGFUSE_INIT_USER_EMAIL:-}'
+      LANGFUSE_INIT_USER_NAME: '${LANGFUSE_INIT_USER_NAME:-}'
+      LANGFUSE_INIT_USER_PASSWORD: '${LANGFUSE_INIT_USER_PASSWORD:-}'
+      # Coolify routes the public FQDN to this container's port 3000 via these magic vars.
+      SERVICE_FQDN_LANGFUSE_3000: '${SERVICE_FQDN_LANGFUSE_3000}'
+      SERVICE_URL_LANGFUSE_3000: '${SERVICE_URL_LANGFUSE_3000}'
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:3000/api/public/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: 'langfuse/langfuse-worker:3'
+    environment:
+      <<: *langfuse-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    restart: unless-stopped
+
+  minio:
+    image: 'minio/minio'
+    # Path-style bucket "langfuse" == the /data/langfuse directory; pre-creating it avoids a
+    # separate `mc mb` init container (this is the upstream Langfuse self-host recipe).
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: '${SERVICE_USER_MINIO}'
+      MINIO_ROOT_PASSWORD: '${SERVICE_PASSWORD_MINIO}'
+    volumes:
+      - 'minio-data:/data'
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  postgres:
+    image: 'postgres:17-alpine'
+    environment:
+      POSTGRES_DB: '${POSTGRES_DB:-langfuse-db}'
+      POSTGRES_USER: '${SERVICE_USER_POSTGRES}'
+      POSTGRES_PASSWORD: '${SERVICE_PASSWORD_POSTGRES}'
+    volumes:
+      - 'langfuse-postgres-data:/var/lib/postgresql/data'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: 'redis:8'
+    command:
+      - sh
+      - '-c'
+      - 'redis-server --requirepass "$SERVICE_PASSWORD_REDIS"'
+    volumes:
+      - 'langfuse-redis-data:/data'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$SERVICE_PASSWORD_REDIS" ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  clickhouse:
+    image: 'clickhouse/clickhouse-server:26.2.4.23'
+    environment:
+      CLICKHOUSE_DB: '${CLICKHOUSE_DB:-default}'
+      CLICKHOUSE_USER: '${SERVICE_USER_CLICKHOUSE}'
+      CLICKHOUSE_PASSWORD: '${SERVICE_PASSWORD_CLICKHOUSE}'
+    volumes:
+      - 'langfuse-clickhouse-data:/var/lib/clickhouse'
+      - 'langfuse-clickhouse-logs:/var/log/clickhouse-server'
+    healthcheck:
+      test: 'wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1'
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  minio-data:
+  langfuse-postgres-data:
+  langfuse-redis-data:
+  langfuse-clickhouse-data:
+  langfuse-clickhouse-logs:

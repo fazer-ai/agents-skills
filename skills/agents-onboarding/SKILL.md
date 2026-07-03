@@ -1,0 +1,80 @@
+---
+name: agents-onboarding
+description: "Conduz a jornada de onboarding 'do zero ao agente de atendimento' do fazer.ai agents num VPS, escolhendo o orquestrador de deploy (Tier A Coolify, B Portainer, C compose genérico para VM crua ou qualquer painel). Provisiona DNS/SSH pelo MCP Hostinger, faz deploy de Chatwoot + fazer.ai agents + Langfuse com TLS, roda o /setup e importa o agente via MCP, pluga o Agent Bot do Chatwoot e valida ponta a ponta (playground + WhatsApp + traces no Langfuse). Use quando o usuário quiser subir/onboardar uma instância nova do fazer.ai agents a partir do zero num VPS, em qualquer um desses orquestradores."
+---
+
+# Onboarding fazer.ai agents: do zero ao agente (multi-plataforma)
+
+Leva uma VPS de "nada" até "agente de atendimento de IA rodando, testado e plugado numa caixa de entrada real". Esta skill é o **bundle executado pelo agente** (você): opera o VPS via SSH + a API do orquestrador escolhido (Coolify / Portainer / compose genérico), e controla o fazer.ai agents via **MCP** (OAuth, dry-run + audit).
+
+## Enquadre a jornada em 4 fases (diga isso ao usuário no começo)
+
+No início, resuma pro usuário o caminho em **4 fases**, pra ele saber onde está e o que vem. Use estas palavras (não os nomes técnicos das etapas):
+
+1. **O agente**: a ferramenta que conduz o onboarding (esta, que ele já escolheu) e os acessos que ela precisa (VPS, domínio) prontos.
+2. **Onde hospedar**: subir a base na infraestrutura dele, o provedor de nuvem + o painel que gerencia os serviços.
+3. **O Chatwoot**: a plataforma de atendimento onde as conversas acontecem.
+4. **Configurar o agente**: importar o agente de IA, ligar na caixa de entrada e testar de ponta a ponta.
+
+É um mapa pro usuário, não o roteiro técnico: as etapas numeradas abaixo (0 a 10) são o seu passo a passo e detalham essas fases. Ao virar de fase, avise ("terminamos de preparar os acessos; agora vou escolher onde hospedar e subir a base") pra a jornada não parecer uma caixa-preta.
+
+## Antes de qualquer coisa
+
+1. **Leia [`guardrails.md`](guardrails.md) inteiro.** Tem fronteiras duras (só a VPS e o domínio indicados, licença única do hub, MCP dry-run, nada de produção de terceiros, nada de segredo em log). Cruzar qualquer uma é parar e perguntar.
+2. **Leia [`gotchas.md`](gotchas.md).** São as armadilhas conhecidas que, se ignoradas, fazem você redescobrir do jeito difícil (FQDN que não dirige o Traefik, embedding por-tenant, Langfuse sem blob storage, persistência de branding etc.).
+3. Confira pré-requisitos em [`references/00-prereqs-and-access.md`](references/00-prereqs-and-access.md): MCPs ligados (Hostinger ×3; o hub `app-fazer-ai` **não** é MCP da sessão, suas ops saem pelo proxy `bunx @fazer-ai/agents hub …`), acesso SSH, e o contrato do ambiente.
+
+## Como operar (princípios)
+
+- **Uma pergunta de cada vez, pela ferramenta de pergunta estruturada (NUNCA um questionário em texto):** quando o agente tiver uma ferramenta de pergunta multiple-choice (**Claude Code: `AskUserQuestion`; Hermes: `clarify`**, setas + opções), **use-a, uma pergunta por mensagem**. Sem ela (Codex/genérico), pergunte em texto, ainda **1-2 itens por vez** (só junte 2 se correlatos, ex.: IP do VPS + caminho da chave SSH). Pergunte na ordem do fluxo, só quando a etapa precisar; **espere a resposta** antes de avançar. Despejar 5-6 campos numa mensagem é o anti-padrão.
+- **Leia o que o CLI já entregou, NUNCA re-pergunte o que já foi decidido:** antes de perguntar qualquer coisa, cheque o contexto que o CLI deixou: (1) os **MCPs conectados**, e se `hostinger-dns`/`hostinger-vps`/`hostinger-domains` estão presentes, o **provider JÁ é Hostinger** (escolhido no CLI); use-os, nunca pergunte "se for Hostinger"; (2) o marcador **`~/.fazer-ai/onboarding.json`** (`chatwootSource` = Chatwoot novo vs. existente/BYO; quando novo, `chatwootTier` + `chatwootLicenseId`; já escolhidos, ver [`references/00-prereqs-and-access.md`](references/00-prereqs-and-access.md)). Re-perguntar provider/origem/tier/licença já definidos é erro.
+- **Listar NÃO é escolher; input do usuário você SEMPRE pergunta:** separe três categorias e trate cada uma certo. **(a) Decidido pelo CLI** (provider/tier/licença) → não re-pergunte (acima). **(b) Sondável tecnicamente** (há acesso SSH? qual orquestrador já está instalado? o A-record propagou?) → sonde, não pergunte. **(c) Escolha do usuário** (**qual VPS, qual domínio raiz, nome de exibição, quais credenciais**): **SEMPRE pergunte**, e **mesmo (especialmente) quando o MCP lista várias opções, apresente-as e deixe o usuário escolher; NUNCA infira nem chute**. Ter o MCP da conta conectado é pra você **listar e perguntar melhor**, não pra decidir pelo usuário; escolher uma VPS/um domínio por conta própria ("só tinha que escolher uma") é **erro**: pare e pergunte. Autonomia é nos **passos técnicos** (deploy, config, comandos), nunca nos **inputs** do usuário.
+- **Deploy por tier, espinha compartilhada:** o *deploy* (subir Chatwoot + fazer.ai agents + Langfuse com TLS) muda por orquestrador; depois dele, a espinha (etapas 6-10: `/setup` → MCP → import → bind → E2E) é **idêntica** em qualquer tier. A etapa 1c escolhe o tier e fixa o **contrato** que o deploy entrega à espinha.
+- **Narre o progresso serviço a serviço, nunca fique em silêncio numa espera longa:** o deploy sobe os serviços em sequência (tipicamente o painel, depois o Chatwoot, depois o fazer.ai agents, depois o Langfuse), e cada um leva vários minutos. Ajuste a contagem ao caso real: com um Chatwoot que já existe (BYO) o Chatwoot não é subido, no Tier C pode nem haver painel. Antes de começar cada um, diga o que vai subir e quanto falta ("vou subir o Chatwoot agora; depois dele faltam 2 serviços"); quando terminar, confirme e anuncie o próximo ("Chatwoot no ar, agora o fazer.ai agents"). Enquanto uma instalação longa roda (imagem baixando, container subindo), dê um sinal de vida em vez de sumir por 5+ minutos. O usuário deve sempre saber **em qual serviço você está** e **quantos faltam**. Cada referência de deploy (02 a 05) reforça isso no começo.
+- **MCP-only para a config do fazer.ai agents** (import, vault, tenant-settings, KB, plugar Chatwoot): **só** as MCP tools (dry-run + audit + fence de tenant), **nunca** REST direto, `/mcp` por fora do harness, leitura do código/bundle pra achar endpoints, nem API key pra contornar. **Se as tools MCP não estão expostas na sessão, PARE e peça ao usuário pra reiniciar o harness** (elas só carregam no boot); não há "fallback REST". SSH/psql/Rails runner só para **infra** (orquestrador, Chatwoot internals), de forma **transitória**. Detalhe e o gate em [`references/06-setup-and-mcp.md`](references/06-setup-and-mcp.md).
+- **Windows/PowerShell: o shell só ORQUESTRA, nunca carrega o código.** Se o seu shell é PowerShell (a maioria das runs Windows; confira o ambiente), tratá-lo como bash é o erro que **mais quebra a run**, e os helpers de caso específico **não te cobrem nos ad-hoc**. **NUNCA** ponha payload numa linha de comando: nada de here-string `@'…'@ | (ssh|python|bash)`, de `ssh <host> '…código…'` com aspas aninhadas/`{{…}}`/`$()`/`(`, de `\` no fim da linha (continuação no PowerShell é `` ` ``, não `\`), de `'{…json…}' | helper` (pipe de payload), nem de `echo`/`Set-Content`/`Out-File > arquivo`. **SEMPRE** escreva o payload num **arquivo** (com a ferramenta de edição, zero shell, sem BOM) e rode apontando pro arquivo: bash/Python local → `bash x.sh`/`python x.py`; bash remoto → `scripts/remote.py --script-file x.sh`; psql/`rails runner` num container remoto → `scripts/remote.py --in-container <c> --exec "<prog>" --script-file x.sql`; JSON de API → `coolify.py … --json-file x.json` (nunca pipe); config do fazer.ai agents → MCP. O PowerShell pode ter variável/loop/`Start-Sleep`; só não pode **carregar o código**. Tabela completa e modos de falha em [`gotchas.md`](gotchas.md).
+- **Idempotência / brownfield:** a VPS pode já ter um orquestrador (Coolify, Portainer, ou outro painel) e/ou outros serviços, em qualquer combinação. Antes de instalar, **sonde e decida por serviço** (etapa 1b, [`references/01b-brownfield.md`](references/01b-brownfield.md)): reaproveite o que está saudável, **nunca destrua** dados do usuário.
+- **Nomes nunca hardcoded:** o nome de exibição/projeto vem do usuário (passo 1) e alimenta o projeto do orquestrador, a org/projeto do Langfuse e o tenant do fazer.ai agents (o `companyName` do `/setup`).
+- **Prévia primeiro, e explique a ação em português claro:** toda mudança que grava algo (ativar a licença, ligar o Chatwoot no agente, criar credenciais) roda primeiro numa **prévia** que só mostra o que vai acontecer, sem efeito; e só grava de verdade depois do "pode ir". Ao pedir o OK, **descreva a ação e o efeito em linguagem de usuário**, sem jargão interno: diga *o que* muda e *por que*, não o nome da tool nem o mecanismo. Mecanismo (pro seu uso, não pra repetir ao usuário): writes do hub (proxy `hub …`) e write tools de MCP previewam por padrão e só aplicam com `--apply`/`dry_run:false`. As frases boas e ruins de cada ponto de aprovação estão em [`guardrails.md`](guardrails.md).
+
+## A jornada (ordem importa)
+
+Abra a referência da etapa **antes** de executá-la (carga sob demanda). O fluxo é **0 → 1 → 1b → 1c**, então o **deploy do tier** escolhido em 1c (Tier A = etapas 2-5; B/C = o doc do tier), convergindo na **espinha 6-10** (igual em todos). As trilhas A (Coolify) e B (Portainer) são as maduras; a C (compose genérico) é mais nova, então trate-a como primeira run guiada (ver [`references/01c-pick-tier.md`](references/01c-pick-tier.md)).
+
+| # | Etapa | Referência |
+|---|-------|-----------|
+| 0 | Pré-requisitos, MCPs, acesso | [`references/00-prereqs-and-access.md`](references/00-prereqs-and-access.md) |
+| 1 | VPS + DNS (A-records `agentes./chatwoot./langfuse.` + painel do tier) + SSH | [`references/01-vps-dns-ssh.md`](references/01-vps-dns-ssh.md) |
+| 1b | **Inventário brownfield**: sondar (read-only) e decidir por-serviço (reusar/instalar/sinalizar) | [`references/01b-brownfield.md`](references/01b-brownfield.md) |
+| 1c | **Selecionar o tier** de deploy + fixar o **contrato** (o que o deploy entrega à espinha) | [`references/01c-pick-tier.md`](references/01c-pick-tier.md) |
+| 2 | **Tier A** · Coolify: reusar/instalar, API Access, **Instance Domain** (`coolify.<root>`) | [`references/02-coolify.md`](references/02-coolify.md) |
+| 3 | Deploy **Chatwoot** (Pro **ou** OSS pelo marcador; Pro: API do Coolify, login Harbor). **`chatwootSource: existing` PULA este passo** e usa o Chatwoot que já existe | [`references/03-chatwoot-pro.md`](references/03-chatwoot-pro.md) |
+| 4 | Deploy **fazer.ai agents** (edição Free/Pro pelo marcador, `templates/docker-compose.coolify.yml`, bootstrap 2-roles + migrate) | [`references/04-agents-image.md`](references/04-agents-image.md) |
+| 5 | Deploy **Langfuse** (+ **MinIO S3 obrigatório**) | [`references/05-langfuse.md`](references/05-langfuse.md) |
+| 6 | fazer.ai agents `/setup` (cria admin SUPER_ADMIN) → conectar **MCP** (OAuth) → **alvo de tenant** (`tenant_list`; passar `tenant` nas tools) | [`references/06-setup-and-mcp.md`](references/06-setup-and-mcp.md) |
+| 8 | **Import do agente** (`agent_import`; padrão **Maria**/Clínica Moreira, vendorado em `samples/agents/maria-clinica-moreira.json`) + embedding por-tenant + reindex/retry da KB | [`references/08-agent-import.md`](references/08-agent-import.md) |
+| 8b | **Pós-import (gate)**: resolver avisos (KB→READY + grounding; STT/TTS/visão) + features opcionais (voz, Google OAuth) | [`references/agent-features.md`](references/agent-features.md) |
+| 9 | Plugar Chatwoot no fazer.ai agents (`deployment_connect` → `set_accounts` → `inbox_bind`) | [`references/09-chatwoot-bind.md`](references/09-chatwoot-bind.md) |
+| 9b | **Licenciar Chatwoot no hub** (Kanban/Pro): com licença disponível (CLI/`hub licenses`) é **happy-path** (`hub create-instance → hub attach-license → Refresh`); sem licença → OSS sem Kanban | [`references/chatwoot-hub-register.md`](references/chatwoot-hub-register.md) |
+| 10 | Validar **E2E** (playground + grounding → **integração via Inbox API** → traces; WhatsApp real opcional) | [`references/10-validate-e2e.md`](references/10-validate-e2e.md) |
+
+**O deploy (etapa 2) ramifica por tier.** As linhas 2-5 acima são a trilha do **Tier A (Coolify)**. Para os outros, escolha em 1c, **substitua 2-5** pelo doc único do tier e convirja direto no **6** (todos entregam o mesmo [contrato](references/01c-pick-tier.md)):
+
+- **Tier B** (Portainer): [`references/deploy-b-portainer.md`](references/deploy-b-portainer.md)
+- **Tier C** (compose genérico, VM crua ou qualquer painel): [`references/deploy-c-compose.md`](references/deploy-c-compose.md)
+
+## Gates de conta (o usuário cria cada admin)
+
+O **usuário** cria o 1º admin no browser do orquestrador (Coolify/Portainer), do Chatwoot e do fazer.ai agents (`/setup`). Você **entrega o link + a instrução e espera** (no Coolify, `coolify.py wait-admin`; no fazer.ai agents, a URL `/setup` com o token do boot), **nunca** cria essas contas por conta própria. Depois do admin criado, o token e o resto da config são com você. **Exceção: o Langfuse** é headless (`LANGFUSE_INIT_*`, etapa 5): você semeia a conta (usuário OWNER) e o operador só faz **login** (`/auth/sign-in`). Detalhes em `guardrails.md`.
+
+## Fora de escopo desta skill (por enquanto)
+
+- **Trilhas dedicadas por painel** (Easypanel/Dokploy/CapRover/etc.): por escolha, não existem. Use o **Tier C** (compose genérico) e adapte ao painel com seu conhecimento dele.
+- Migração/atualização de serviços incompatíveis (a etapa 1b **detecta e sinaliza**; a migração em si é decisão do usuário).
+- Caminho manual (sem IA) e adapters de agente não-Claude-Code (Codex/Hermes).
+
+Os três tiers de deploy (A/B/C) estão **dentro** do escopo (a etapa 1c roteia).
+
+## Critério de aceite (E2E, objetivo final)
+
+A run está **provada** quando: o agente responde no **playground** E numa **mensagem real de WhatsApp** (incoming → webhook → debounce → turn → modelo real → resposta entregue na conversa do Chatwoot); a KB está **grounding** (docs READY, resposta usa o conteúdo indexado); e os **traces aparecem no Langfuse** (ingestion 207). Detalhe e checklist em [`references/10-validate-e2e.md`](references/10-validate-e2e.md).
