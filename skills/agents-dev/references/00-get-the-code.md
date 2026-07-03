@@ -6,22 +6,20 @@ Bifurca por edição. Pergunte ao desenvolvedor qual ele tem acesso, ou deduza: 
 
 Clone direto, sem credencial:
 ```sh
-git clone https://github.com/fazer-ai/agents.git
+git clone https://github.com/fazer-ai/agents.git fazer-ai-agents
 ```
-(O repo Free é `fazer-ai/agents`; a marca client-facing do produto ainda pode mudar.)
+(O repo Free é `fazer-ai/agents`.)
 
 ## Pro (repo privado via git proxy do hub)
 
-O código Pro/Full (`fazer-ai/agents-pro`) é privado. O acesso é por **credencial per-user do hub** (a mesma que serve a marketplace de skills), não por convite direto no GitHub.
+O código Pro/Full (`fazer-ai/agents-pro`) é privado. O acesso é por **credencial per-user do hub** (a mesma que serve a marketplace de skills), usada como HTTP Basic no git proxy — não por convite direto no GitHub.
 
-1. Garanta o login no hub (`app.fazer.ai`) e a credencial git/NPM **per-user** (via o MCP `app-fazer-ai`; dry-run, depois apply com OK). Uma credencial por usuário, válida em todas as suas máquinas.
-2. Clone autenticado pelo git proxy do hub:
+1. Logue no hub (`app.fazer.ai`) e obtenha a credencial git/NPM **per-user** (a mesma da marketplace de skills). No console do hub, o card de código-fonte Pro revela a credencial e o comando de clone prontos; uma credencial por usuário, válida em todas as suas máquinas.
+2. Clone autenticado pelo git proxy do hub (fetch-only — você não dá push aqui; contribuições vão pro repo Free):
 ```sh
-git clone https://<user>:<token>@app.fazer.ai/git/<repo-do-codigo>.git
+git clone https://<user>:<token>@app.fazer.ai/git/agents-pro.git fazer-ai-agents-pro
 ```
 3. **Nunca** logar o token nem commitá-lo.
-
-> **Dependência do hub (em aberto):** hoje o git proxy do hub serve a marketplace de **skills**, não o código-fonte do fazer.ai agents. O endpoint que serve `fazer-ai/agents-pro` ainda será exposto no hub; até lá, o caminho Pro não é exercitável e o path acima (`/git/<repo-do-codigo>`) é o contrato assumido, a confirmar quando o hub publicar.
 
 ## Não-redistribuição (Pro)
 

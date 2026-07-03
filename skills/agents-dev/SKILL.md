@@ -32,6 +32,4 @@ Ver `guardrails.md` (Pro privado, segredos fora do repo, `bun check` verde) e `g
 
 ## Pendências
 
-- Confirmar o **nome client-facing** (marca do produto) do Free; o repo é `fazer-ai/agents`.
-- **Caminho Pro depende do hub:** o git proxy do código-fonte (`fazer-ai/agents-pro`) ainda será exposto; até lá, o clone Pro de `references/00-get-the-code.md` é o contrato assumido.
 - **Wording de não-redistribuição (Pro):** é conteúdo público-facing; confirmar a redação com a revisão de licenciamento.

@@ -13,7 +13,7 @@
         "en": "fazer.ai agents skills: onboarding (zero-to-agent on a VPS), development (work on the code), and operation (debug a live instance).",
         "pt-BR": "Skills do fazer.ai agents: onboarding (subir do zero num VPS), desenvolvimento (mexer no código) e operação (debugar em produção)."
       },
-      "version": "1.0.3",
+      "version": "1.0.4",
       "source": "./",
       "category": "devops",
       "tags": [
