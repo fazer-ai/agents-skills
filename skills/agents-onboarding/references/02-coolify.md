@@ -79,11 +79,19 @@ docker restart coolify
 ```sh
 python3 scripts/remote.py --ssh root@<VPS_IP> --ssh-opts "-i <chave>" --script-file set-instance-domain.sh
 ```
-O `UPDATE` **sozinho não regenera** o proxy; é o **`restart coolify`** (o app, **NÃO** `coolify-proxy`) que reescreve a rota do painel. Derruba painel+API ~30-40s (o token já gerado **sobrevive**). Exige o A-record `coolify.` (etapa 1). Depois **valide**:
+O `UPDATE` **sozinho não regenera** o proxy; é o **`restart coolify`** (o app, **NÃO** `coolify-proxy`) que reescreve a rota do painel. Derruba painel+API ~30-40s (o token já gerado **sobrevive**). Exige o A-record `coolify.` (etapa 1). O cert Let's Encrypt não sai instantâneo (restart + ACME levam alguns segundos), então **não valide com um `curl` único** (um `000`/`503` na 1ª tentativa não quer dizer que falhou): faça **poll com retry ~90s**:
 ```sh
-curl -so /dev/null -w "%{http_code} ssl=%{ssl_verify_result}\n" https://coolify.<seu-dominio>
+for i in $(seq 1 18); do
+  code=$(curl -so /dev/null -w "%{http_code} ssl=%{ssl_verify_result}" https://coolify.<seu-dominio>)
+  echo "try $i: $code"; case "$code" in 200*|302*) echo "coolify domain OK"; break;; esac; sleep 5
+done
 ```
-→ `200`/`302` com `ssl=0` (cert válido; o ACME emite quando o A-record resolve). Só siga sem o domínio se ele **falhar de verdade** após este caminho (não como atalho).
+Esperado: `200`/`302` com `ssl=0` (cert válido). **Se estourar os ~90s**, suba a escada de diagnóstico antes de desistir:
+1. **DNS resolve pro IP?** `dig +short coolify.<seu-dominio> @1.1.1.1` deve devolver `<VPS_IP>`. Se não, o A-record não propagou: volte à etapa 1 e refaça o poll de DNS.
+2. **80/443 abertas na VPS?** o ACME (HTTP-01) precisa da 80 e o acesso da 443. De fora: `curl -sS -o /dev/null -w '%{http_code}\n' http://coolify.<seu-dominio>/.well-known/acme-challenge/probe` (um firewall/security-group do provedor pode estar bloqueando).
+3. **Logs do proxy:** `docker logs --tail 50 coolify-proxy` (procure erro de emissão/ACME).
+
+Só siga sem o domínio se ele **falhar de verdade** após esta escada (não como atalho).
 
 ## DB do Coolify (acesso direto; ver gotchas)
 

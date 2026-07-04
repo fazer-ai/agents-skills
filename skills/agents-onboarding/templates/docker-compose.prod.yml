@@ -30,7 +30,12 @@ services:
       - PORT=3000
       - PUBLIC_URL=${PUBLIC_URL}
       - CDN_URL=${PUBLIC_URL}
-      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      # NOTE: default to the public URL, NOT `*` — the WS realtime origin check does an exact
+      # match, so `*` matches no real Origin and 403s every WebSocket upgrade.
+      - CORS_ORIGIN=${CORS_ORIGIN:-${PUBLIC_URL}}
+      # First-run: disable the /setup token in this trusted, TLS-fronted onboarding window (the
+      # advisory lock still caps /setup at one admin). Set to `true` to require it.
+      - SETUP_TOKEN_REQUIRED=${SETUP_TOKEN_REQUIRED:-false}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}

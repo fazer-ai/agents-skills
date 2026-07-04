@@ -36,7 +36,7 @@ Qualquer que seja o tier, o segmento de deploy termina quando **entrega exatamen
    `BRANDING_STORAGE_DIR`/`QUOTES_STORAGE_DIR` no volume persistente, **réplica única**. O
    `scripts/gen-onboarding-env.ts` gera os secrets + URLs; os composes
    do repo já trazem o resto.
-3. **agents acessível + token do `/setup`** legível nos logs de boot (`${PUBLIC_URL}/setup?token=…`).
+3. **agents acessível + `/setup` alcançável** em `${PUBLIC_URL}/setup` (o onboarding sobe com `SETUP_TOKEN_REQUIRED=false`, então o `/setup` **não pede token**; ver [`06-setup-and-mcp.md`](06-setup-and-mcp.md)).
 4. **admin token do Chatwoot** obtível (via Rails runner) pro `deployment_connect`/bind da etapa 9.
 5. **Langfuse com MinIO** (a ingestion v3 exige blob storage) + as chaves (public/secret) obtíveis.
 
@@ -50,7 +50,8 @@ Entregou os 5 → vá direto pra **etapa 6** (a mesma pra todos os tiers).
 - **Réplica única** do fazer.ai agents: os workers (scheduler/debounce/outbound) assumem um único líder; não escale o
   serviço `agents` pra >1 (ver o aviso no `templates/docker-compose.prod.yml`).
 - **DNS antes do ACME**: o cert só emite com o A-record já resolvendo pro IP da VPS. Crie os A-records
-  (etapa 1) e confirme a resolução **antes** de anexar o domínio no painel / subir o Caddy.
+  (etapa 1) e confirme a resolução com o poll `until [ "$(dig +short <sub>.<domínio> @1.1.1.1 | tail -1)" =
+  "<VPS_IP>" ]; do sleep 15; done` **antes** de anexar o domínio no painel / subir o Caddy.
 - **Quem ocupa 80/443**: se já há um proxy/ingress (Traefik do painel, nginx, um Caddy), o Caddy
   *bundled* do `templates/docker-compose.portainer.yml` **conflita**:
   reuse o proxy existente com `templates/docker-compose.prod.yml` (BYO-proxy).

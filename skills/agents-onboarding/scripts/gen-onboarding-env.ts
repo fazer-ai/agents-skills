@@ -93,7 +93,10 @@ export function buildOnboardingEnv(opts: OnboardingEnvOptions): OnboardingEnv {
 
   return {
     PUBLIC_URL: publicUrl,
-    CORS_ORIGIN: opts.corsOrigin ?? "*",
+    // Default to the public URL, NOT `*`: the WS realtime origin check does an exact match, so a
+    // literal `*` matches no real Origin and 403s every WebSocket upgrade. origin.ts strips the
+    // scheme, so the full URL works as the allowlist entry.
+    CORS_ORIGIN: opts.corsOrigin ?? publicUrl,
     LOG_LEVEL: "info",
     APP_PORT: opts.appPort ?? "3000",
     SETUP_TOKEN_REQUIRED: "false",

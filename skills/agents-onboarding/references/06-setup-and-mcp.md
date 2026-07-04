@@ -1,11 +1,11 @@
 # 06: `/setup` do fazer.ai agents + conectar o MCP
 
-## `/setup` (cria o 1º admin = SUPER_ADMIN)
+## `/setup` (cria o 1º admin = SUPER_ADMIN + o tenant)
 
-- Quando o banco está sem usuários, o fazer.ai agents abre o `/setup`. No boot ela loga um token único e a URL pronta `${PUBLIC_URL}/setup?token=...` (a menos que `SETUP_TOKEN_REQUIRED=false`).
-- O 1º admin é criado como **SUPER_ADMIN** (`tenant_id` NULL) via `POST /api/auth/setup`.
-- O **usuário** abre a URL `/setup` (com o token do boot) e cria o 1º admin. Você entrega a URL e **espera**; não cria por conta própria.
-- Config de boot relevante (defaults): `setupTokenRequired:true`, `signupEnabled:false`.
+- Quando o banco está sem usuários, o fazer.ai agents abre o `/setup`. O compose do onboarding já sobe a agents com **`SETUP_TOKEN_REQUIRED=false`**, então o `/setup` **não pede token** nesta janela: você entrega a URL `https://agentes.<seu-dominio>/setup` e **espera**; não cria a conta por conta própria.
+- **Não garimpe o token dos logs de boot.** O token é por-processo, em memória, e é regerado a cada restart do container (o `restart: always` + healthcheck do deploy provocam isso), então uma URL `?token=...` capturada antes de um restart vira 401. Com `SETUP_TOKEN_REQUIRED=false` esse problema some de vez.
+- O 1º admin nasce **SUPER_ADMIN** (`tenant_id` NULL) via `POST /api/auth/setup`, e o **mesmo passo cria um tenant** a partir do `companyName` que o usuário digita (confira depois com `tenant_list`, abaixo).
+- **Rede de segurança (login determinístico):** se precisar (re)obter um admin sem passar pelo `/setup` no browser, rode dentro do container `bun set-admin <email> <senha>` (Coolify: console/exec do serviço `agents`; compose: `docker compose exec agents bun set-admin <email> <senha>`). Cria/promove um **SUPER_ADMIN** direto no banco, sem depender do token efêmero. **Porém cria só o login, não o tenant:** num banco vazio o `/setup` é o que **também** cria o tenant do `companyName` (e, criado o 1º usuário pelo `set-admin`, o `/setup` fecha). Use o `set-admin` quando o tenant **já existe**; senão, prefira o `/setup` tokenless acima.
 
 ### O tenant nasce do `companyName` do `/setup`: confira depois
 
@@ -15,15 +15,20 @@ O `/setup` cria **um** tenant a partir do `companyName` que quem preenche o form
 
 ## Conectar o MCP do fazer.ai agents (OAuth). GATE: sem as tools, PARE, não contorne
 
-Toda a config do fazer.ai agents (import do agente, vault, tenant-settings, KB, deployment/bind) é **exclusivamente via MCP tools**: elas carregam dry-run + audit + o fence de tenant. As tools de MCP só carregam no **boot** da sessão, e a **ordem do reinício muda por harness**: o Claude autentica na TUI (`/mcp`), que exige o server já carregado no boot, então reinicia **antes** de autenticar; Codex/Hermes autenticam por comando de CLI, então reiniciam **depois**. Endpoint do fazer.ai agents: `https://agentes.<seu-dominio>` (discovery/caminho exato em `docs/mcp.md`).
+Toda a config do fazer.ai agents (import do agente, vault, tenant-settings, KB, deployment/bind) é **exclusivamente via MCP tools**: elas carregam dry-run + audit + o fence de tenant. As tools de MCP só carregam no **boot** da sessão, e a **ordem do reinício muda por harness**: o Claude autentica na TUI (`/mcp`), que exige o server já carregado no boot, então reinicia **antes** de autenticar; Codex/Hermes autenticam por comando de CLI, então reiniciam **depois**. Endpoint MCP do fazer.ai agents: **`https://agentes.<seu-dominio>/api/v1/mcp`** — use o path completo `/api/v1/mcp`. A raiz `https://agentes.<seu-dominio>` ou um `.../mcp` sem o `/api/v1` cai na SPA e o login OAuth falha com `invalid_target` (o servidor liga o token ao recurso canônico `.../api/v1/mcp`). Discovery em `docs/mcp.md`.
 
 **Claude Code** (reinicie ANTES de autenticar):
-1. **Adicione:** `claude mcp add` (transport HTTP) pro endpoint. O server entra no config, mas **não** aparece na sessão atual nem no `/mcp` (a sessão leu o config no boot).
+1. **Adicione** (transport HTTP, com o path completo): `claude mcp add --transport http fazer-ai https://agentes.<seu-dominio>/api/v1/mcp`. O server entra no config, mas **não** aparece na sessão atual nem no `/mcp` (a sessão leu o config no boot).
 2. **Reinicie a sessão** (feche e reabra o `claude` no mesmo dir). Só agora o `/mcp` lista `fazer-ai` como **"Needs authentication"** (esperado, não é falha).
 3. **Autentique:** `/mcp` → `fazer-ai` → **Authenticate** → browser; o usuário loga com o admin do `/setup` (SUPER_ADMIN) e aprova os escopos (`mcp:read/write/admin`). Ao voltar **"Connected"**, as tools carregam **na mesma sessão, sem 2º reinício**.
 
 **Codex / Hermes** (autentique por CLI, depois reinicie):
-1. **Adicione + logue:** `codex mcp add` + `codex mcp login` (ou o equivalente do Hermes), que abre o browser pro mesmo login SUPER_ADMIN.
+1. **Adicione + logue** (com o path completo). Codex:
+   ```sh
+   codex mcp add fazer-ai https://agentes.<seu-dominio>/api/v1/mcp
+   codex mcp login fazer-ai
+   ```
+   Hermes: `hermes -p fazer-ai mcp add fazer-ai --url https://agentes.<seu-dominio>/api/v1/mcp --auth oauth` + `hermes -p fazer-ai mcp login fazer-ai`. O `login` abre o browser pro mesmo login SUPER_ADMIN.
 2. **Reinicie a sessão.** As tools carregam no boot seguinte.
 
 O access token fica no store de MCP do harness, não conosco (`guardrails.md`).
@@ -31,7 +36,7 @@ O access token fica no store de MCP do harness, não conosco (`guardrails.md`).
 **GATE DURO. Se as tools `fazer-ai` (`whoami`, `tenant_list`, `agent_import`, …) NÃO estão expostas nesta sessão:**
 
 - **PARE e peça ao usuário pra completar o passo do harness dele** (Claude: **reiniciar → `/mcp` Authenticate**; Codex/Hermes: **`mcp login` → reiniciar**), confirmando o Authenticate/login **e** o reinício. Espere ele voltar. Esse é o **único** caminho.
-- **NUNCA contorne.** É **proibido**, para qualquer config do fazer.ai agents: chamar a **API REST direto** (mintar API key, cookie + `x-tenant-id`); fazer requisições ao endpoint `/mcp` **por fora do harness**; **ler o código-fonte/bundle do fazer.ai agents** (`/app/src`, `/app/dist`) pra descobrir endpoints internos; montar **OAuth manual**. Esses bypasses pulam dry-run/audit/fence, são frágeis, e **não provam o MCP**, que é o produto que esta run existe pra validar.
+- **NUNCA contorne.** É **proibido**, para qualquer config do fazer.ai agents: chamar a **API REST direto** (mintar API key, cookie + `x-tenant-id`); fazer requisições ao endpoint `/api/v1/mcp` **por fora do harness**; **ler o código-fonte/bundle do fazer.ai agents** (`/app/src`, `/app/dist`) pra descobrir endpoints internos; montar **OAuth manual**. Esses bypasses pulam dry-run/audit/fence, são frágeis, e **não provam o MCP**, que é o produto que esta run existe pra validar.
 - **Sinal de que você entrou no anti-padrão:** se você se pegou grepando `agents.controller.ts`, procurando `POST /api/v1/agents/import`, ou mintando uma API key pra "equivalente REST" porque "a tool não apareceu" → **PARE imediatamente** e peça o reinício. Não existe "fallback REST transitório" para config do fazer.ai agents. **Idem pra achar uma rota/deeplink do console:** não baixe+grepe o bundle da SPA; as rotas que a skill usa estão nas refs (ex.: o deeplink de credencial em `08-agent-import.md` §2), e o bundle é minificado/hasheado (frágil).
 
 ## Alvo de tenant nas MCP tools (SUPER_ADMIN)

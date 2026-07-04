@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Chatwoot admin access-token reader for the fazer.ai agents onboarding. The USER creates the first admin in
-# the Chatwoot onboarding screen (account gate); this reads that admin by email and returns its API access
-# token; it never creates an account or user. Runs a Rails runner INSIDE the Chatwoot container over SSH,
+# the Chatwoot onboarding screen (account gate); this reads that admin (by --email, or the single admin of
+# the first account when --email is omitted) and returns its API access token; it never creates an account or
+# user. Runs a Rails runner INSIDE the Chatwoot container over SSH,
 # base64-piped so the script's own quotes never hit a shell.
 #
 # Output: the admin api_access_token is written to a 0600 file; only metadata is printed. The token is what
@@ -19,26 +20,52 @@ from pathlib import Path
 
 CONTAINER_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
-# The email arrives base64-decoded in-container so accents/spaces can't break quoting. RESULT_JSON: marks
-# the line we parse. This READS the admin the user already created (account gate); it never creates one.
+# The email arrives base64-decoded in-container so accents/spaces can't break quoting (empty => derive the
+# single admin). RESULT_JSON: marks the line we parse. This READS an admin the user already created (account
+# gate); it never creates one.
 RUBY_PROVISION = r'''
 require 'base64'; require 'json'
 result =
   begin
-    email = Base64.strict_decode64("__B64_EMAIL__").force_encoding("UTF-8")
-    u = User.find_by(email: email)
+    raw = "__B64_EMAIL__"
+    email = raw.empty? ? nil : Base64.strict_decode64(raw).force_encoding("UTF-8")
+    u = nil; err = nil; cands = nil
+    if email
+      u = User.find_by(email: email)
+      err = "no Chatwoot user with email #{email}: create the admin in the Chatwoot onboarding screen first, then re-run" if u.nil?
+    else
+      # No --email: derive the single admin (exactly one after onboarding). Prefer the administrators of
+      # the first account; fall back to the first user on a single-user install. Multiple admins => ask.
+      acc0 = Account.order(:id).first
+      if acc0.nil?
+        err = "no Chatwoot account yet (finish the Chatwoot onboarding first)"
+      else
+        admins = acc0.account_users.where(role: AccountUser.roles[:administrator]).map(&:user).uniq
+        if admins.size == 1
+          u = admins.first
+        elsif admins.empty?
+          u = User.order(:id).first
+          err = "no administrator in account #{acc0.id} (finish the Chatwoot onboarding first)" if u.nil?
+        else
+          err = "multiple administrators in account #{acc0.id}; re-run with --email <one of the candidates>"
+          cands = admins.map(&:email)
+        end
+      end
+    end
     if u.nil?
-      { "error" => "no Chatwoot user with email #{email}: create the admin in the Chatwoot onboarding screen first, then re-run" }
+      res = { "error" => (err || "could not resolve a Chatwoot admin") }
+      res["candidates"] = cands if cands
+      res
     else
       acc = u.accounts.order(:id).first
       if acc.nil?
-        { "error" => "Chatwoot user #{email} belongs to no account yet (finish the Chatwoot onboarding first)" }
+        { "error" => "Chatwoot user #{u.email} belongs to no account yet (finish the Chatwoot onboarding first)" }
       else
         # The polymorphic AccessToken (owner = the user) is the stable interface across images, whether or
         # not a given image still exposes User#access_token. Idempotent: find_or_create_by! reuses the
         # user's existing token (the model's before-create hook fills a freshly minted one).
         at = AccessToken.find_or_create_by!(owner: u)
-        { "account_id" => acc.id, "user_id" => u.id, "email" => email, "token" => at.token }
+        { "account_id" => acc.id, "user_id" => u.id, "email" => u.email, "token" => at.token }
       end
     end
   rescue => e
@@ -111,11 +138,12 @@ def run_ssh(dest, ssh_opts, remote_cmd, timeout):
 def cmd_provision(args):
     if not CONTAINER_RE.match(args.container):
         fail(f"invalid --container {args.container!r} (expected [A-Za-z0-9_.-]+)")
-    if "@" not in args.email:
+    # --email is optional: omit it and the runner resolves the single admin of the first account (there is
+    # exactly one after onboarding). Pass it only to disambiguate a multi-admin brownfield.
+    if args.email is not None and "@" not in args.email:
         fail("--email must be an email address")
-    ruby = RUBY_PROVISION.replace(
-        "__B64_EMAIL__", base64.b64encode(args.email.encode("utf-8")).decode("ascii")
-    )
+    b64_email = base64.b64encode((args.email or "").encode("utf-8")).decode("ascii")
+    ruby = RUBY_PROVISION.replace("__B64_EMAIL__", b64_email)
     target = f"docker exec -i {args.container} bundle exec rails runner -"
     proc = run_ssh(args.ssh, args.ssh_opts, b64_pipe(ruby, target), args.timeout)
     combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
@@ -134,7 +162,8 @@ def cmd_provision(args):
     # The runner emits a deliberate {"error": …} when the admin does not exist yet (the user must create
     # it in the Chatwoot UI first). Surface THAT, not the generic "no result": it tells the agent to wait.
     if data.get("error"):
-        fail(data["error"])
+        # Surface the candidate list on a multi-admin brownfield so the agent can ask (never open-field).
+        fail(data["error"], **({"candidates": data["candidates"]} if data.get("candidates") else {}))
     dest = Path(args.out)
     dest.write_text(
         json.dumps(
@@ -221,8 +250,8 @@ def build_parser():
     ssh.add_argument("--ssh-opts", default="", help="extra ssh options, e.g. '-i ~/.ssh/key -p 2222'")
     ssh.add_argument("--timeout", type=int, default=180)
 
-    prov = sub.add_parser("provision", parents=[ssh], help="read the admin (by email) the user created + return its API token")
-    prov.add_argument("--email", required=True, help="email of the admin the user created in the Chatwoot UI")
+    prov = sub.add_parser("provision", parents=[ssh], help="read the single admin the user created + return its API token (auto-resolves without --email)")
+    prov.add_argument("--email", default=None, help="admin email; OPTIONAL — omit to auto-resolve the single admin, pass only to disambiguate a multi-admin brownfield")
     prov.add_argument("--out", required=True, help="file to write the api_access_token to (chmod 600)")
     prov.set_defaults(fn=cmd_provision)
 

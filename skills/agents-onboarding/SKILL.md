@@ -65,7 +65,7 @@ Abra a referência da etapa **antes** de executá-la (carga sob demanda). O flux
 
 ## Gates de conta (o usuário cria cada admin)
 
-O **usuário** cria o 1º admin no browser do orquestrador (Coolify/Portainer), do Chatwoot e do fazer.ai agents (`/setup`). Você **entrega o link + a instrução e espera** (no Coolify, `coolify.py wait-admin`; no fazer.ai agents, a URL `/setup` com o token do boot), **nunca** cria essas contas por conta própria. Depois do admin criado, o token e o resto da config são com você. **Exceção: o Langfuse** é headless (`LANGFUSE_INIT_*`, etapa 5): você semeia a conta (usuário OWNER) e o operador só faz **login** (`/auth/sign-in`). Detalhes em `guardrails.md`.
+O **usuário** cria o 1º admin no browser do orquestrador (Coolify/Portainer), do Chatwoot e do fazer.ai agents (`/setup`). Você **entrega o link + a instrução e espera** (no Coolify, `coolify.py wait-admin`; no fazer.ai agents, a URL `/setup`, que **não pede token**: o onboarding sobe com `SETUP_TOKEN_REQUIRED=false`), **nunca** cria essas contas por conta própria. Depois do admin criado, o token e o resto da config são com você. **Exceção: o Langfuse** é headless (`LANGFUSE_INIT_*`, etapa 5): você semeia a conta (usuário OWNER) e o operador só faz **login** (`/auth/sign-in`); como ele não vê o seed acontecer, faça um **handoff explícito** (anuncie o painel no ar, entregue URL + e-mail + senha temporária) e **espere ele confirmar que entrou** antes de seguir. Detalhes em `guardrails.md`.
 
 ## Fora de escopo desta skill (por enquanto)
 
@@ -77,4 +77,4 @@ Os três tiers de deploy (A/B/C) estão **dentro** do escopo (a etapa 1c roteia)
 
 ## Critério de aceite (E2E, objetivo final)
 
-A run está **provada** quando: o agente responde no **playground** E numa **mensagem real de WhatsApp** (incoming → webhook → debounce → turn → modelo real → resposta entregue na conversa do Chatwoot); a KB está **grounding** (docs READY, resposta usa o conteúdo indexado); e os **traces aparecem no Langfuse** (ingestion 207). Detalhe e checklist em [`references/10-validate-e2e.md`](references/10-validate-e2e.md).
+A run está **provada** quando: o agente responde no **playground** E na **integração via Inbox API do Chatwoot** (mensagem incoming injetada na conversa → webhook → debounce → turn → modelo real → resposta **outgoing** observada na conversa); a KB está **grounding** (docs READY, resposta usa o conteúdo indexado); e os **traces aparecem no Langfuse** (ingestion 207). O **WhatsApp físico é opcional** (a integração já foi provada via Inbox API). Detalhe e checklist em [`references/10-validate-e2e.md`](references/10-validate-e2e.md).

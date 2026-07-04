@@ -56,12 +56,16 @@ O **domínio raiz (`<seu-dominio>`) é escolha do usuário**: liste os domínios
 - `langfuse.<seu-dominio>`: Langfuse (recomendado)
 - **painel do orquestrador** (se houver e você quiser um domínio limpo): `coolify.` (Tier A) / `portainer.` (Tier B); outro painel usa o próprio; no compose genérico (Tier C) pode não haver painel.
 
-Tools do `hostinger-dns`: `DNS_getDNSRecordsV1` (inspecionar), `DNS_updateDNSRecordsV1` (setar). **Monitore a propagação** antes de prosseguir: o ACME (Traefik do Coolify, Caddy do Portainer, ou o proxy do tier) só emite o certificado quando o A-record resolve. Sem isso, os serviços sobem mas ficam 503/sem TLS.
+Tools do `hostinger-dns`: `DNS_getDNSRecordsV1` (inspecionar), `DNS_updateDNSRecordsV1` (setar). **Confirme a resolução antes de prosseguir** (o ACME (Traefik do Coolify, Caddy do Portainer, ou o proxy do tier) só emite o certificado quando o A-record resolve; sem isso os serviços sobem mas ficam 503/sem TLS). Não confie num `dig` único: faça **poll do DNS em loop** até o registro apontar pro IP, para cada subdomínio que você criou:
+```sh
+until [ "$(dig +short agentes.<seu-dominio> @1.1.1.1 | tail -1)" = "<VPS_IP>" ]; do sleep 15; done; echo "agentes resolvido"
+```
+Repita pra `chatwoot.`/`langfuse.` e o subdomínio do painel (`coolify.`/`portainer.`). Só **anexe o domínio no painel / suba o proxy depois** que resolver. (Windows sem `dig`: `nslookup agentes.<seu-dominio> 1.1.1.1`; no PowerShell, adapte o loop com `Start-Sleep`.)
 
 ## Outro provider (VPS/DNS fora da Hostinger)
 
 Se o usuário usa outro provider de VPS e/ou DNS, **não há MCP da Hostinger**. Pergunte qual provider ele usa e conduza com base no seu conhecimento dele. Só o **provisionamento de VPS/DNS** muda de ferramenta; do SSH em diante (deploy do tier, agents, branding, bind) o fluxo é idêntico.
 
-- **DNS:** crie os **mesmos A-records** (`agentes.`/`chatwoot.`/`langfuse.` + o painel do tier → IP da VPS) pelo painel/CLI/API do provider do usuário. Monitore a propagação igual (o ACME só emite o cert quando o A-record resolve).
+- **DNS:** crie os **mesmos A-records** (`agentes.`/`chatwoot.`/`langfuse.` + o painel do tier → IP da VPS) pelo painel/CLI/API do provider do usuário. Confirme a resolução igual, com o mesmo poll `until [ "$(dig +short <sub>.<seu-dominio> @1.1.1.1 | tail -1)" = "<VPS_IP>" ]; do sleep 15; done` (o ACME só emite o cert quando o A-record resolve).
 - **VPS:** o usuário cria a VPS no provider dele e fornece **IP + chave SSH**. Confirme que a porta 22 está aberta e que dá pra logar como root (ou com sudo). O resto da `01` (comando SSH, base64-pipe) vale igual.
 - **Sem VPS ainda?** Sugira adquirir (recomendado: Hostinger, [link de parceiro fazer.ai](https://www.hostg.xyz/SHJfs), cupom `FAZERAI` = 10% de desconto na primeira compra). Detalhe na `00-prereqs-and-access.md`.

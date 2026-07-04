@@ -46,8 +46,11 @@ Daqui em diante os passos são os mesmos da VM crua; só muda o "como" você apl
    docker compose -f templates/langfuse/docker-compose.yml up -d  # com MinIO (obrigatório)
    ```
 4. **Boot do fazer.ai agents:** o CMD da imagem faz `bootstrap → migrate → serve`; **não** sobrescreva `command:`.
-5. **Token do `/setup`** e **admin token do Chatwoot** saem dos logs (`docker compose logs`) / Rails runner,
-   igual aos outros tiers.
+5. **O `/setup` da agents não pede token** (o compose do onboarding sobe com `SETUP_TOKEN_REQUIRED=false`):
+   entregue `https://agentes.<domínio>/setup` ao usuário, sem garimpar token de log. Rede de segurança:
+   `docker compose exec agents bun set-admin <email> <senha>` cria um SUPER_ADMIN direto (ver
+   [`06-setup-and-mcp.md`](06-setup-and-mcp.md)). O **admin token do Chatwoot** sai do Rails runner, igual aos
+   outros tiers.
 6. **Verifique** (200 + cert Let's Encrypt) e **siga pra etapa 6**.
 
 ## Brownfield

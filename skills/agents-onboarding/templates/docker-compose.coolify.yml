@@ -16,7 +16,12 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - JWT_SECRET=${SERVICE_PASSWORD_64_JWTSECRET}
       - ENCRYPTION_KEY=${SERVICE_PASSWORD_64_ENCRYPTIONKEY}
-      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      # NOTE: default to the public URL, NOT `*` — the WS realtime origin check does an exact
+      # match, so `*` matches no real Origin and 403s every WebSocket upgrade.
+      - CORS_ORIGIN=${CORS_ORIGIN:-${SERVICE_URL_AGENTS}}
+      # First-run: disable the /setup token in this trusted, TLS-fronted onboarding window (the
+      # advisory lock still caps /setup at one admin). Set to `true` to require it.
+      - SETUP_TOKEN_REQUIRED=${SETUP_TOKEN_REQUIRED:-false}
       - CDN_URL=${SERVICE_URL_AGENTS}
       # NOTE: opt this onboarding / self-hosted deploy into MCP Dynamic Client Registration so the
       # operator's AI agent (Claude Code / Codex) can `mcp login` to THIS instance's MCP — OAuth DCR

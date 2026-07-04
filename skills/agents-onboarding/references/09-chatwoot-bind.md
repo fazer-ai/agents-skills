@@ -16,9 +16,11 @@ deployment_connect { "base_url":"https://chatwoot.<seu-dominio>", "admin_token":
 
 O token é usado in-band e **redatado no audit** (o audit guarda só metadados). Valida via `/profile`, **persiste o deployment** (URL + token criptografado na linha do deployment) e retorna as contas alcançáveis. Ainda **não** conecta as contas: isso é o passo 2.
 
+Passar o `admin_token` cru como argumento aqui é o **caminho sancionado**, não um vazamento: o audit redige server-side e a tool nunca devolve o token. **Não recuse** por "segredo no argumento" nem invente pending/deeplink (o admin token não é de vault); leve o token do arquivo `0600` (`chatwoot-admin.json`) pro argumento **sem** `cat`/print (ver `guardrails.md` › Segredos).
+
 ### Caso B: traga seu próprio Chatwoot (só o usuário tem o token)
 
-O agente **não** tem o token. Em vez de inventar credencial pending (o token nem é de vault), o agente **linka o usuário pra tela `/channels`**: em "Connect instance" (SUPER_ADMIN), o usuário cola Base URL + Admin access token (validado via `/profile`, guardado encriptado). O usuário pode seguir ali pelo "Manage accounts" e pelo bind de inbox, ou devolver pro agente continuar via MCP.
+O agente **não** tem o token. Em vez de inventar credencial pending (o token nem é de vault), o agente **linka o usuário pra `/channels?connect=<base_url_do_chatwoot>`** — o deep-link já abre o modal "Connect instance" (SUPER_ADMIN) com a **Base URL preenchida**, faltando só o token: o usuário cola o Admin access token (validado via `/profile`, guardado encriptado). **Onde achar o token no Chatwoot:** `<base_url_do_chatwoot>/app/accounts/1/profile/settings` → seção **"Access Token"** (copie o valor; conta 1 no install padrão, mas o token é do usuário, então qualquer conta que ele acesse serve). O usuário pode seguir ali pelo "Manage accounts" e pelo bind de inbox, ou devolver pro agente continuar via MCP.
 
 ## 2. Conectar a conta + sincronizar inboxes (`deployment_set_accounts`)
 
