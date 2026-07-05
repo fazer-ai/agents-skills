@@ -55,8 +55,8 @@ Abra a referência da etapa **antes** de executá-la (carga sob demanda). O flux
 | 8 | **Import do agente** (`agent_import`; padrão **Maria**/Clínica Moreira, vendorado em `samples/agents/maria-clinica-moreira.json`) + embedding por-tenant + reindex/retry da KB | [`references/08-agent-import.md`](references/08-agent-import.md) |
 | 8b | **Pós-import (gate)**: resolver avisos (KB→READY + grounding; STT/TTS/visão) + features opcionais (voz, Google OAuth) | [`references/agent-features.md`](references/agent-features.md) |
 | 9 | Plugar Chatwoot no fazer.ai agents (`deployment_connect` → `set_accounts` → `inbox_bind`) | [`references/09-chatwoot-bind.md`](references/09-chatwoot-bind.md) |
-| 9b | **Licenciar Chatwoot no hub** (Kanban/Pro): com licença disponível (CLI/`hub licenses`) é **happy-path** (`hub create-instance → hub attach-license → Refresh`); sem licença → OSS sem Kanban | [`references/chatwoot-hub-register.md`](references/chatwoot-hub-register.md) |
-| 10 | Validar **E2E** (playground + grounding → **integração via Inbox API** → traces; WhatsApp real opcional) | [`references/10-validate-e2e.md`](references/10-validate-e2e.md) |
+| 9b | **Licenciar Chatwoot no hub** (Kanban/Pro): com licença disponível (CLI/`hub licenses`) é **happy-path** (`hub create-instance → hub attach-license → Refresh`) e o Refresh é **auto-verificável** (leia o diagnóstico: `VERIFIED_AT` recente + `SYNC_ERROR_MESSAGE` nil); **attach sem Refresh confirmado = Kanban travado**. Sem licença → OSS sem Kanban | [`references/chatwoot-hub-register.md`](references/chatwoot-hub-register.md) |
+| 10 | Validar **E2E** (playground + grounding → **integração via Inbox API** → traces; **Kanban ativo** no tier Pro; WhatsApp real opcional) | [`references/10-validate-e2e.md`](references/10-validate-e2e.md) |
 
 **O deploy (etapa 2) ramifica por tier.** As linhas 2-5 acima são a trilha do **Tier A (Coolify)**. Para os outros, escolha em 1c, **substitua 2-5** pelo doc único do tier e convirja direto no **6** (todos entregam o mesmo [contrato](references/01c-pick-tier.md)):
 

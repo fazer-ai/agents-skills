@@ -49,7 +49,13 @@ A edição é decidida **no deploy** pelo marcador do CLI `~/.fazer-ai/onboardin
    ```sh
    python3 scripts/chatwoot-admin.py refresh-subscription --ssh root@<VPS_IP> --container <chatwoot-rails-container>
    ```
-   **`jitter_applied: true` é obrigatório** (o script já passa). Sem ele, o job só se reagenda (janela determinística de até 30 min) e o sync nem roda. A saída traz `config_keys` (deve listar os `FAZER_AI_SUBSCRIPTION_*`) e `diagnostics` (`SYNC_ERROR_MESSAGE` nil = ok; `VERIFIED_AT` recente = ok). No super admin (`/super_admin/settings`), "fazer.ai Subscription" fica ativa e o Kanban aparece.
+   **`jitter_applied: true` é obrigatório** (o script já passa). Sem ele, o job só se reagenda (janela determinística de até 30 min) e o sync nem roda.
+
+   **Leia a saída de volta e só dê o 9b por concluído se vier verde — não basta o comando ter rodado.** Verde = `refreshed: true` **E** `config_keys` lista os `FAZER_AI_SUBSCRIPTION_*` **E** `diagnostics` traz `SYNC_ERROR_MESSAGE` **nil** + `VERIFIED_AT` **recente** (o timestamp do Refresh que você acabou de disparar). Interpretação das falhas:
+   - `VERIFIED_AT` vazio/antigo **ou** sem os `FAZER_AI_SUBSCRIPTION_*` em `config_keys` → a assinatura **não** sincronizou e o **Kanban NÃO vai aparecer**. Re-rode o Refresh (o "hub não respondeu" é transitório, ver Erros comuns); se persistir, cheque `FRONTEND_URL` e o attach (passos 2–3) antes de seguir.
+   - `SYNC_ERROR_MESSAGE` preenchido → o hub **recusou** (licença não atachada à instância certa / instância errada). Trate a causa; não ignore e não declare 9b feito.
+
+   Confirmação visual do mesmo estado: no super admin (`/super_admin/settings`), "fazer.ai Subscription" fica ativa e o Kanban aparece.
 
 ## Erros comuns
 
@@ -57,8 +63,9 @@ A edição é decidida **no deploy** pelo marcador do CLI `~/.fazer-ai/onboardin
   sessão segue válida; o refresh token nem foi consumido): **rode o MESMO comando de novo** em instantes.
   Só **"sessão expirada/ausente"** (erro de auth real) pede re-rodar o CLI de onboarding pra logar no
   browser. Em nenhum dos casos contorne o `hub` indo por REST/MCP por fora: ou re-tenta, ou re-loga.
-- **Kanban não aparece com imagem Pro:** faltou o passo 3. A imagem traz o código; a assinatura libera em
-  runtime. Rode o Refresh.
+- **Kanban não aparece com imagem Pro:** faltou o **passo 4 (o Refresh)**, ou ele rodou mas **não veio verde**
+  (confira `VERIFIED_AT` recente + `SYNC_ERROR_MESSAGE` nil + os `FAZER_AI_SUBSCRIPTION_*` em `config_keys`). A
+  imagem traz o código; a assinatura libera em runtime. Rode/re-rode o Refresh e confirme o diagnóstico.
 - **`FRONTEND_URL` vazio:** o controller do Refresh recusa, e o `installation_host` enviado ao hub fica
   vazio. Sete antes.
 - **403 / inativo no `/api/ping`:** a licença não está atachada à instância certa no hub. Confira

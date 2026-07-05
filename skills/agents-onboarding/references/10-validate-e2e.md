@@ -36,6 +36,13 @@ Pareie a inbox real (Baileys via QR) com um número que o usuário controle e ma
 
 - Confirme que o turn aparece no Langfuse (env `production-playground` ou `production`, session = threadId do fazer.ai agents). A ingestion já foi validada em 207 na etapa 5.
 
+## 4. Kanban / assinatura Pro (OBRIGATÓRIO quando o tier é Pro)
+
+Só se aplica ao **Chatwoot Pro com licença** (etapa 9b); em OSS/community pule (não há Kanban). **Imagem Pro não basta:** sem a assinatura sincronizada o Kanban fica travado, então confirme que ela está **ativa**, não só que o attach-license rodou:
+
+- Rode (ou re-rode) `chatwoot-admin.py refresh-subscription` (etapa 9b, passo 4) e confirme no diagnóstico: `SYNC_ERROR_MESSAGE` **nil** + `VERIFIED_AT` **recente** + `config_keys` lista os `FAZER_AI_SUBSCRIPTION_*`. Confirmação visual: `/super_admin/settings` → "fazer.ai Subscription" ativa, board de Kanban visível no Chatwoot.
+- Não veio verde → a etapa 9b **não** fechou: volte pra `chatwoot-hub-register.md` (Refresh transitório, `FRONTEND_URL`, casamento licença↔instância) e resolva antes de declarar o onboarding concluído. Um attach-license sem Refresh confirmado é a causa nº 1 de "Kanban não apareceu".
+
 ## Critério de aceite
 
-Responde no **playground** (com **KB grounding** confirmado) E na **integração via Inbox API** (conversa ativada com `/teste`, em test mode); **trace** no Langfuse. O **WhatsApp físico** é confirmação opcional (a integração já foi provada via Inbox API). O **Kanban** segue o passo 9b: happy-path quando há licença, ausente no OSS.
+Responde no **playground** (com **KB grounding** confirmado) E na **integração via Inbox API** (conversa ativada com `/teste`, em test mode); **trace** no Langfuse. O **WhatsApp físico** é confirmação opcional (a integração já foi provada via Inbox API). **Kanban (tier Pro):** a assinatura tem que estar **ativa e sincronizada** (passo 4: `VERIFIED_AT` recente + `SYNC_ERROR_MESSAGE` nil, ou o board visível), **não só a licença atachada** — imagem Pro sem Refresh confirmado = Kanban travado. Em OSS/community não há Kanban (nada a validar aqui).
