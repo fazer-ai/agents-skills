@@ -40,7 +40,7 @@ A sequência `bootstrap → migrate deploy → serve` é o CMD do Dockerfile. **
 O `SERVICE_FQDN_*` não dirige o Traefik; quem roteia é a linha em `service_applications` (ver `gotchas.md`). Ache o id e seta o FQDN:
 ```sh
 python3 scripts/coolify.py list-apps --ssh root@<VPS_IP>            # ache o id do agents
-python3 scripts/coolify.py set-fqdn  --ssh root@<VPS_IP> --app-id <id> --fqdn https://agentes.<seu-dominio>
+python3 scripts/coolify.py set-fqdn  --ssh root@<VPS_IP> --app-id <id> --fqdn https://agents.<seu-dominio>
 python3 scripts/coolify.py api-post  --base-url http://<VPS_IP>:8000 --token-file coolify.token --path /services/<uuid>/restart
 ```
-Antes do DNS resolver, verifique o routing por sslip.io: `curl http://agents-<service-uuid>.<VPS_IP>.sslip.io/api/health`. Depois do `/setup` (etapa 6) o app responde em `https://agentes.<seu-dominio>`.
+Antes do DNS resolver, verifique o routing por sslip.io: `curl http://agents-<service-uuid>.<VPS_IP>.sslip.io/api/health`. Depois do `/setup` (etapa 6) o app responde em `https://agents.<seu-dominio>`.

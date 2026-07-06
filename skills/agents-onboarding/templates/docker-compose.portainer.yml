@@ -12,7 +12,7 @@
 # agents + postgres verbatim and adds caddy. Keep those two blocks in sync with docker-compose.prod.yml.
 #
 # Fill the env with:
-#   bun scripts/gen-onboarding-env.ts --public-url https://agentes.example.com [--acme-email you@example.com]
+#   bun scripts/gen-onboarding-env.ts --public-url https://agents.example.com [--acme-email you@example.com]
 # It emits CADDY_DOMAIN + the two-role DB URLs + secrets. On Portainer, paste this file as a Stack and set
 # the same variables in the Stack env editor (or pass them as the API's Env[] array). To also serve the
 # Portainer UI itself on a clean HTTPS domain, set PORTAINER_DOMAIN (e.g. portainer.example.com) — Caddy

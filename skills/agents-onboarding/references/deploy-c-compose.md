@@ -18,7 +18,7 @@ O padrão de qualquer painel PaaS (Easypanel/Dokploy/CapRover/…) é o mesmo:
   rotear + certificar. Um Caddy nosso brigaria pelas portas.
 - O env vem do **`.env` que você controla** (não há magic vars do Coolify): gere com o
   `scripts/gen-onboarding-env.ts` e cole as vars no serviço pelo painel.
-- Cada stack (fazer.ai agents, Chatwoot, Langfuse) vira um projeto Compose; anexe `agentes.`/`chatwoot.`/`langfuse.` a
+- Cada stack (fazer.ai agents, Chatwoot, Langfuse) vira um projeto Compose; anexe `agents.`/`chatwoot.`/`langfuse.` a
   cada um. Detalhes de UI/API variam por produto e versão: resolva com seu conhecimento do painel da run.
 
 Daqui em diante os passos são os mesmos da VM crua; só muda o "como" você aplica o compose + env.
@@ -35,7 +35,7 @@ Daqui em diante os passos são os mesmos da VM crua; só muda o "como" você apl
 ## Passos
 
 1. **DNS primeiro** (A-records resolvendo antes do ACME; ver [1c](01c-pick-tier.md)).
-2. **Env:** `bun scripts/gen-onboarding-env.ts --public-url https://agentes.<domínio> --acme-email
+2. **Env:** `bun scripts/gen-onboarding-env.ts --public-url https://agents.<domínio> --acme-email
    voce@<domínio>` gera o `.env` (duas roles, secrets, URLs, `CADDY_DOMAIN`). Chatwoot/Langfuse têm env
    próprio (ver [`03-chatwoot-pro.md`](03-chatwoot-pro.md) e [`05-langfuse.md`](05-langfuse.md)).
 3. **Suba cada stack** (a partir da raiz desta skill, com o `.env` ao lado; num painel, o equivalente é
@@ -47,7 +47,7 @@ Daqui em diante os passos são os mesmos da VM crua; só muda o "como" você apl
    ```
 4. **Boot do fazer.ai agents:** o CMD da imagem faz `bootstrap → migrate → serve`; **não** sobrescreva `command:`.
 5. **O `/setup` da agents não pede token** (o compose do onboarding sobe com `SETUP_TOKEN_REQUIRED=false`):
-   entregue `https://agentes.<domínio>/setup` ao usuário, sem garimpar token de log. Rede de segurança:
+   entregue `https://agents.<domínio>/setup` ao usuário, sem garimpar token de log. Rede de segurança:
    `docker compose exec agents bun set-admin <email> <senha>` cria um SUPER_ADMIN direto (ver
    [`06-setup-and-mcp.md`](06-setup-and-mcp.md)). O **admin token do Chatwoot** sai do Rails runner, igual aos
    outros tiers.

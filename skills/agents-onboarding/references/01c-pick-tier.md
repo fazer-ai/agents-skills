@@ -27,7 +27,7 @@ Qualquer que seja o tier, o segmento de deploy termina quando **entrega exatamen
 (6-10) não pede mais nada e não olha pra dentro do orquestrador:
 
 1. **Três URLs HTTPS públicas**, com **DNS resolvido + TLS válido** (Let's Encrypt):
-   - `agentes.<domínio>` → agents (`GET /api/health` = 200).
+   - `agents.<domínio>` → agents (`GET /api/health` = 200).
    - `chatwoot.<domínio>` → Chatwoot (Pro ou OSS).
    - `langfuse.<domínio>` → Langfuse (recomendado; o E2E valida traces).
 2. **agents subida com as duas roles de DB** (superuser p/ bootstrap+migrate, runtime **não-superuser**) e o

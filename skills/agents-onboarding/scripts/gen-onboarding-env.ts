@@ -140,9 +140,9 @@ async function main() {
   const publicUrl = flag("public-url") ?? process.env.PUBLIC_URL;
   if (!publicUrl) {
     console.error(
-      "usage: bun scripts/gen-onboarding-env.ts --public-url https://agentes.example.com [--out .env] [--force]\n" +
+      "usage: bun scripts/gen-onboarding-env.ts --public-url https://agents.example.com [--out .env] [--force]\n" +
         "       [--db-host postgres] [--db-port 5432] [--db-name secretaria_v4_db] [--pg-user postgres] [--app-user secv4_app]\n" +
-        "       [--caddy-domain agentes.example.com] [--acme-email you@example.com]  # for docker-compose.portainer.yml",
+        "       [--caddy-domain agents.example.com] [--acme-email you@example.com]  # for docker-compose.portainer.yml",
     );
     process.exit(1);
   }

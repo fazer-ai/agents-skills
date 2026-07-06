@@ -12,7 +12,7 @@ necessárias e **distintas**:
 
 A edição é decidida **no deploy** pelo marcador do CLI `~/.fazer-ai/onboarding.json`
 (`chatwootTier` + `chatwootLicenseId`), com fallback pro `hub licenses` se o marcador faltar:
-- **`chatwootTier: "pro"`** (ou, sem marcador, há licença CHATWOOT no hub) → deploy da **imagem Pro** e **estes passos são happy-path**: registrar + atachar (use `chatwootLicenseId`) + Refresh pra ligar o Kanban. Não pule.
+- **`chatwootTier: "pro"`** (ou, sem marcador, há licença CHATWOOT no hub) → deploy da **imagem Pro** e **estes passos são happy-path**: registrar (pelo **UUID**) + atachar (use `chatwootLicenseId`) + Refresh + ligar o Kanban na conta. Não pule.
 - **`chatwootTier: "community"`** (ou, sem marcador, sem licença) → deploy da imagem **OSS** (sem Kanban) e segue; nada a fazer aqui.
 - **`chatwootSource: "existing"`** (Chatwoot BYO, sem `chatwootTier` no marcador) → detecte Pro/OSS pela **imagem** (etapa 1b); não assuma Pro. Um Pro existente **sem** Kanban pode ser licenciado por estes passos, mas **não é forçado** (só se o usuário quiser); OSS não tem Kanban.
 
@@ -29,33 +29,45 @@ A edição é decidida **no deploy** pelo marcador do CLI `~/.fazer-ai/onboardin
 
 ## Passos
 
-> **Ao pedir o OK do usuário** para aplicar (passos 2 a 4), fale em linguagem de usuário: "vou ativar o seu plano Pro nesta instalação, o que libera o Kanban no Chatwoot". **Não** cite `attach-license`, "Refresh da assinatura", "idempotente" nem os comandos: são o seu mecanismo. Frases boas × ruins em `guardrails.md`.
+> **Ao pedir o OK do usuário** para aplicar (passos 2 a 5), fale em linguagem de usuário: "vou ativar o seu plano Pro nesta instalação e ligar o Kanban no Chatwoot". **Não** cite `attach-license`, "Refresh da assinatura", "habilitar a feature na conta", "idempotente" nem os comandos: são o seu mecanismo. Frases boas × ruins em `guardrails.md`.
 
-1. **Identidade da instância.** Pegue o host/identifier que o hub casa, direto do Chatwoot (read-only, sem hub):
+> **O Kanban depende de TRÊS coisas, todas necessárias** (por isso os 5 passos): (a) a **imagem Pro** (código, decidido no deploy); (b) a **assinatura casada** no hub (passos 1 a 4: a licença atachada à instância certa + Refresh que grava o token); (c) a **feature ligada na conta** (passo 5). Cada uma sozinha não basta: assinatura casada com a feature desligada na conta = Kanban invisível. É a pegadinha nº 1.
+
+1. **Identidade da instância.** Pegue o identificador que o hub casa, direto do Chatwoot (read-only, sem hub):
    ```sh
    python3 scripts/chatwoot-admin.py installation-id --ssh root@<VPS_IP> --container <chatwoot-rails-container>
    ```
-   Devolve `frontend_url` (o host) + `installation_identifier`. O `identifier` que o hub usa é o **host** (ex.: `chatwoot.<seu-dominio>`).
-2. **Instância no hub.** Confira se já existe e crie se faltar (dry-run primeiro; `--apply` pra valer):
+   Devolve `installation_identifier` (o **UUID de instalação**) + `frontend_url` (o host). **O hub casa a instância pelo `installation_identifier` (UUID), NÃO pelo host**, o host é só metadado que o ping preenche depois. Use o **UUID** como `--identifier` no passo 2. (Criar a instância com o host é a causa clássica de "assinatura verifica mas o Kanban não vem": o ping manda o UUID, não casa com a instância criada pelo host, e o hub responde inativo.)
+2. **Instância no hub.** Liste e reuse a instância cujo `identifier` == o **UUID** do passo 1; crie só se faltar (dry-run primeiro; `--apply` pra valer):
    ```sh
    bunx @fazer-ai/agents hub instances
-   bunx @fazer-ai/agents hub create-instance --identifier chatwoot.<seu-dominio> --apply
+   bunx @fazer-ai/agents hub create-instance --identifier <installation_identifier UUID> --apply
    ```
-3. **Atacha a licença** (uma feature por instância; os tipos têm que bater). O `--instance` é o id que aparece em `hub instances`:
+   O ping **não** auto-cria a instância no hub: ela precisa existir (com o UUID) antes de casar. Uma instância com `host: null` / `metadata: null` em `hub instances` = nunca recebeu ping (identifier errado): não atache a licença nela.
+3. **Atacha a licença** (uma feature por instância; os tipos têm que bater). O `--instance` é o id da instância do UUID (passo 2), não o número:
    ```sh
    bunx @fazer-ai/agents hub attach-license --license <licença CHATWOOT> --instance <id> --apply
    ```
-4. **Refresh + verify na instância** (o botão "Refresh" do super admin) via `scripts/chatwoot-admin.py`, que roda o job e reporta os configs da assinatura (NÃO despeja valores crus que poderiam ser segredo):
+4. **Refresh + verify da assinatura** (o botão "Refresh" do super admin) via `scripts/chatwoot-admin.py`, que roda o job e reporta o estado da assinatura (NÃO despeja valores crus que poderiam ser segredo):
    ```sh
    python3 scripts/chatwoot-admin.py refresh-subscription --ssh root@<VPS_IP> --container <chatwoot-rails-container>
    ```
    **`jitter_applied: true` é obrigatório** (o script já passa). Sem ele, o job só se reagenda (janela determinística de até 30 min) e o sync nem roda.
 
-   **Leia a saída de volta e só dê o 9b por concluído se vier verde — não basta o comando ter rodado.** Verde = `refreshed: true` **E** `config_keys` lista os `FAZER_AI_SUBSCRIPTION_*` **E** `diagnostics` traz `SYNC_ERROR_MESSAGE` **nil** + `VERIFIED_AT` **recente** (o timestamp do Refresh que você acabou de disparar). Interpretação das falhas:
-   - `VERIFIED_AT` vazio/antigo **ou** sem os `FAZER_AI_SUBSCRIPTION_*` em `config_keys` → a assinatura **não** sincronizou e o **Kanban NÃO vai aparecer**. Re-rode o Refresh (o "hub não respondeu" é transitório, ver Erros comuns); se persistir, cheque `FRONTEND_URL` e o attach (passos 2–3) antes de seguir.
-   - `SYNC_ERROR_MESSAGE` preenchido → o hub **recusou** (licença não atachada à instância certa / instância errada). Trate a causa; não ignore e não declare 9b feito.
+   **Leia a saída e só siga se a assinatura vier ATIVA: não basta o comando ter rodado, nem `VERIFIED_AT` estar preenchido.** O sinal real é o bloco `subscription`: verde = `token_present: true` **E** `subscription_active: true` **E** `kanban_enabled: true`. **Uma recusa 403/inativo do hub AINDA grava `VERIFIED_AT` e limpa o token**, então "existe uma chave `FAZER_AI_SUBSCRIPTION_*`" ou "`SYNC_ERROR_MESSAGE` nil" **não** provam nada. Interpretação das falhas:
+   - `token_present: false` (com `SYNC_ERROR_MESSAGE` nil) → o hub respondeu **inativo**: a licença não está atachada à instância do **UUID** certo. Volte aos passos 1 a 3 (confira o casamento por UUID) antes de seguir. Não declare a assinatura ativa.
+   - `SYNC_ERROR_MESSAGE` preenchido → o hub **recusou** ou não respondeu. Se for "hub não respondeu" (transitório), re-rode o Refresh; senão trate a causa (`FRONTEND_URL`, attach).
+5. **Ligar o Kanban na conta** (a ativação por-conta que a assinatura só autoriza) via `scripts/chatwoot-admin.py`:
+   ```sh
+   python3 scripts/chatwoot-admin.py enable-kanban --ssh root@<VPS_IP> --container <chatwoot-rails-container>
+   ```
+   Liga o flag da feature na conta do onboarding (a primeira conta; use `--account-id` só num brownfield multi-conta). A validação do próprio Chatwoot roda um sync fresco e **recusa se a assinatura não conceder o Kanban**, então este passo, além de ativar, **prova a cadeia inteira** licença/instância. Idempotente (no-op se já ligado).
 
-   Confirmação visual do mesmo estado: no super admin (`/super_admin/settings`), "fazer.ai Subscription" fica ativa e o Kanban aparece.
+   **Só dê o 9b por concluído com `kanban_feature_enabled: true`.** O script sai com erro (exit 1) se não conseguir ligar; leia o `enable_error`:
+   - `kanban_feature_not_available` → a assinatura não está concedendo o Kanban: a instância/licença não casou (volte aos passos 1 a 4, confira o UUID). Este é o erro que expõe o identifier errado do passo 1.
+   - `kanban_account_limit_reached` → o limite de contas da licença já foi atingido por outras contas; num onboarding novo não deve acontecer.
+
+   Confirmação visual do mesmo estado: no super admin (`/super_admin/settings`), "fazer.ai Subscription" fica ativa e o board de Kanban aparece no Chatwoot da conta.
 
 ## Erros comuns
 
@@ -63,13 +75,19 @@ A edição é decidida **no deploy** pelo marcador do CLI `~/.fazer-ai/onboardin
   sessão segue válida; o refresh token nem foi consumido): **rode o MESMO comando de novo** em instantes.
   Só **"sessão expirada/ausente"** (erro de auth real) pede re-rodar o CLI de onboarding pra logar no
   browser. Em nenhum dos casos contorne o `hub` indo por REST/MCP por fora: ou re-tenta, ou re-loga.
-- **Kanban não aparece com imagem Pro:** faltou o **passo 4 (o Refresh)**, ou ele rodou mas **não veio verde**
-  (confira `VERIFIED_AT` recente + `SYNC_ERROR_MESSAGE` nil + os `FAZER_AI_SUBSCRIPTION_*` em `config_keys`). A
-  imagem traz o código; a assinatura libera em runtime. Rode/re-rode o Refresh e confirme o diagnóstico.
+- **Instância criada com o host em vez do UUID:** o ping manda o `installation_identifier` (UUID), não casa
+  com a instância do host, e o hub responde inativo (token nunca grava). Sintoma: `hub instances` mostra a
+  instância com `host: null` / `metadata: null` e o Refresh dá `token_present: false`. Crie/reuse a instância
+  do **UUID** (passo 1) e mova a licença pra ela (`attach-license --instance <id do UUID>`).
+- **Kanban não aparece com imagem Pro e assinatura ativa:** faltou o **passo 5** (ligar a feature na conta).
+  A assinatura só autoriza; o flag por-conta é separado. Rode `enable-kanban` e confirme `kanban_feature_enabled: true`.
+- **Kanban não aparece + assinatura não ativa:** faltou o **passo 4** (Refresh) ou ele não veio verde
+  (`token_present`/`subscription_active`/`kanban_enabled`). A imagem traz o código; a assinatura libera em
+  runtime. Confira o casamento por UUID (passos 1 a 3) e re-rode.
 - **`FRONTEND_URL` vazio:** o controller do Refresh recusa, e o `installation_host` enviado ao hub fica
   vazio. Sete antes.
 - **403 / inativo no `/api/ping`:** a licença não está atachada à instância certa no hub. Confira
-  `bunx @fazer-ai/agents hub get-license --license <id>` / `hub get-instance --instance <id>` (casamento por identifier/host).
+  `bunx @fazer-ai/agents hub get-license --license <id>` / `hub get-instance --instance <id>` (casamento pelo **UUID**, não pelo host).
 - **Assinatura "out of sync" > 3 dias:** o job auto-desativa (`auto_deactivate_if_stale`). Rode o Refresh
   pra re-sincronizar.
 

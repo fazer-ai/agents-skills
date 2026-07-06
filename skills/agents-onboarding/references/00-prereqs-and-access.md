@@ -23,7 +23,7 @@ Marcador ausente (fallback por token, ou outro ponto de entrada) → decida pelo
 
 - **VPS:** `root@<VPS_IP>` (no Hostinger, o id da VM é `<VPS_ID>`). **Qual VPS é escolha do usuário**: se a conta tem mais de uma, liste e **pergunte** (nunca escolha). Acesso SSH como `root` (sonde primeiro; só peça ou gere chave se faltar). Coolify pode já estar instalado (brownfield) ou não. Sondagem + comando SSH na `01-vps-dns-ssh.md`.
 - **Sem VPS ainda?** Sugira adquirir uma. Recomendado: Hostinger, pelo [link de parceiro fazer.ai](https://www.hostg.xyz/SHJfs) (cupom `FAZERAI` = 10% de desconto na primeira compra). Em **outro provider**, o usuário cria a VPS lá e fornece IP + chave SSH; o fluxo segue igual (ver `01-vps-dns-ssh.md`).
-- **Domínio:** `<seu-dominio>`. **O domínio raiz é escolha do usuário**: liste os domínios da conta e **pergunte qual** (nunca assuma). Os subdomínios de onboarding ficam livres pra apontar (`agentes.`, `chatwoot.`, `coolify.`, `langfuse.`).
+- **Domínio:** `<seu-dominio>`. **O domínio raiz é escolha do usuário**: liste os domínios da conta e **pergunte qual** (nunca assuma). Os subdomínios de onboarding ficam livres pra apontar (`agents.`, `chatwoot.`, `coolify.`, `langfuse.`).
 - **Chave do provedor de modelo** (OpenAI ou outro): o usuário fornece pra preencher o vault do agente (playground/E2E). As demais credenciais entram via deeplink (pending).
 - **Número de WhatsApp** que o usuário controle, se for validar o transporte real no E2E (etapa 10).
 

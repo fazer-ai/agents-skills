@@ -75,20 +75,84 @@ puts "RESULT_JSON:" + JSON.generate(result)
 '''
 
 # Re-runs the fazer.ai "check new versions" job so the hub-side subscription (Kanban/Pro) registers, then
-# reports the subscription config key NAMES present (+ any *status* values); never dumps raw config values,
-# which could hold a secret. jitter_applied:true is mandatory (else the job only reschedules, no sync).
+# reports the AUTHORITATIVE subscription state, never raw config values (could hold a secret).
+# jitter_applied:true is mandatory (else the job only reschedules, no sync). The `subscription` block is the
+# real signal: a 403/inactive ping STILL sets VERIFIED_AT while clearing the token, so "a FAZER_AI_SUBSCRIPTION_*
+# key exists" is NOT proof the subscription is active: `token_present` + `subscription_active` +
+# `kanban_enabled` are. Guarded for OSS (no FazerAiHub) so the same command is safe on any image.
 RUBY_REFRESH = r'''
 require 'json'
 Internal::CheckNewVersionsJob.perform_now(jitter_applied: true)
 names = InstallationConfig.where("name ILIKE '%subscription%' OR name ILIKE 'fazer%'").pluck(:name)
 diag = {}
 %w[FAZER_AI_SUBSCRIPTION_SYNC_ERROR_MESSAGE FAZER_AI_SUBSCRIPTION_VERIFIED_AT].each { |k| diag[k] = InstallationConfig.find_by(name: k)&.value }
-puts "RESULT_JSON:" + JSON.generate({"refreshed" => true, "config_keys" => names, "diagnostics" => diag})
+sub = { "token_present" => InstallationConfig.find_by(name: 'FAZER_AI_SUBSCRIPTION_TOKEN')&.value.present? }
+if defined?(FazerAiHub)
+  FazerAiHub.clear_cache!
+  sub["pro_image"] = true
+  sub["subscription_active"] = (FazerAiHub.subscription_active? rescue nil)
+  sub["kanban_enabled"] = (FazerAiHub.feature_enabled?('kanban') rescue nil)
+  sub["kanban_account_limit"] = (FazerAiHub.kanban_account_limit rescue nil)
+else
+  sub["pro_image"] = false
+end
+puts "RESULT_JSON:" + JSON.generate({"refreshed" => true, "config_keys" => names, "diagnostics" => diag, "subscription" => sub})
 '''
 
-# Lê a identidade da instância que o hub usa pra casar (host = FRONTEND_URL; identifier = UUID de
-# instalação do Chatwoot quando existe). É o input do `agents hub create-instance --identifier <host>`
-# / attach-license, sem precisar do hub MCP no agente. Read-only.
+# Enables the Kanban feature FLAG on the account (`enable_features!('kanban')`). This is the account-level
+# activation the subscription only AUTHORIZES: with the Pro image + matched subscription, the flag is still
+# off until enabled here, and Kanban stays invisible. The model's own validation (`validate_kanban_limit`)
+# runs a fresh hub sync and refuses if the subscription doesn't grant Kanban (raises
+# `kanban_feature_not_available`) or the license account_limit is exceeded (`kanban_account_limit_reached`).
+# So this single op both activates AND proves the whole license/instance chain. Idempotent (no-op if already
+# enabled). Reports the real end state (`kanban_feature_enabled`/`kanban_ready`), never a secret.
+RUBY_ENABLE_KANBAN = r'''
+require 'json'
+result =
+  begin
+    unless defined?(FazerAiHub)
+      { "error" => "not a Pro image (FazerAiHub absent): Kanban needs the chatwoot-pro image" }
+    else
+      acc_id = "__ACCOUNT_ID__"
+      acc = acc_id.empty? ? Account.order(:id).first : Account.find_by(id: acc_id.to_i)
+      if acc.nil?
+        { "error" => "no Chatwoot account (id=#{acc_id.empty? ? 'first' : acc_id}); finish the Chatwoot onboarding first" }
+      else
+        Internal::CheckNewVersionsJob.perform_now(jitter_applied: true)
+        FazerAiHub.clear_cache!
+        enable_error = nil
+        unless acc.feature_enabled?('kanban')
+          begin
+            acc.enable_features!('kanban')
+          rescue ActiveRecord::RecordInvalid => e
+            enable_error = e.record.errors.full_messages.join('; ')
+          rescue => e
+            enable_error = "#{e.class}: #{e.message}"
+          end
+        end
+        acc.reload
+        FazerAiHub.clear_cache!
+        {
+          "account_id" => acc.id,
+          "kanban_feature_enabled" => acc.feature_enabled?('kanban'),
+          "kanban_ready" => (acc.kanban_feature_enabled? rescue nil),
+          "subscription_active" => (FazerAiHub.subscription_active? rescue nil),
+          "subscription_kanban_enabled" => (FazerAiHub.feature_enabled?('kanban') rescue nil),
+          "kanban_account_limit" => (FazerAiHub.kanban_account_limit rescue nil),
+          "enable_error" => enable_error
+        }
+      end
+    end
+  rescue => e
+    { "error" => "#{e.class}: #{e.message}" }
+  end
+puts "RESULT_JSON:" + JSON.generate(result)
+'''
+
+# Lê a identidade da instância que o hub usa pra casar. O hub casa a instância ESTRITAMENTE pelo
+# `installation_identifier` (o UUID de instalação do Chatwoot, config INSTALLATION_IDENTIFIER); o host
+# (FRONTEND_URL) é só metadado que o ping preenche depois. Logo o `installation_identifier` (UUID) é o
+# input do `agents hub create-instance --identifier <UUID>` / attach-license (NÃO o host). Read-only.
 RUBY_INSTALLATION_ID = r'''
 require 'json'
 ident = (InstallationConfig.find_by(name: 'INSTALLATION_IDENTIFIER')&.value rescue nil)
@@ -237,6 +301,42 @@ def cmd_installation_id(args):
     out({"ok": True, **data})
 
 
+def cmd_enable_kanban(args):
+    if not CONTAINER_RE.match(args.container):
+        fail(f"invalid --container {args.container!r} (expected [A-Za-z0-9_.-]+)")
+    acc_id = args.account_id or ""
+    # Digit-only guard: the value is inlined into the Ruby runner, so refuse anything but an int (no injection).
+    if acc_id and not acc_id.isdigit():
+        fail(f"--account-id must be an integer, got {acc_id!r}")
+    ruby = RUBY_ENABLE_KANBAN.replace("__ACCOUNT_ID__", acc_id)
+    target = f"docker exec -i {args.container} bundle exec rails runner -"
+    proc = run_ssh(args.ssh, args.ssh_opts, b64_pipe(ruby, target), args.timeout)
+    combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    match = re.search(r"RESULT_JSON:(\{.*\})", combined)
+    if not match:
+        fail(
+            "Rails runner returned no result (is --container the Chatwoot rails container?)",
+            exit_code=proc.returncode,
+            stdout=(proc.stdout or "")[-600:],
+            stderr=(proc.stderr or "")[-600:],
+        )
+    try:
+        data = json.loads(match.group(1))
+    except ValueError:
+        fail("could not parse RESULT_JSON", raw=match.group(1)[:200])
+    # Hard errors (no account / not a Pro image) → non-zero so the agent can't miss them.
+    if data.get("error"):
+        fail(data["error"])
+    # The op ran; `kanban_feature_enabled` is the authoritative success. Surface a soft failure (e.g. the
+    # subscription doesn't grant Kanban) with exit 1 so a broken license/instance match is never green.
+    if not data.get("kanban_feature_enabled"):
+        fail(
+            data.get("enable_error") or "Kanban not enabled (subscription not granting it; check the license/instance match)",
+            **data,
+        )
+    out({"ok": True, **data})
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="chatwoot-admin.py",
@@ -264,6 +364,18 @@ def build_parser():
         "installation-id", parents=[ssh], help="read the instance identity the hub matches (host + uuid)"
     )
     idcmd.set_defaults(fn=cmd_installation_id)
+
+    kanban = sub.add_parser(
+        "enable-kanban",
+        parents=[ssh],
+        help="enable the Kanban feature on the account (account-level activation) + report the real end state",
+    )
+    kanban.add_argument(
+        "--account-id",
+        default=None,
+        help="Chatwoot account id; OPTIONAL, omit to target the first account (the onboarding account)",
+    )
+    kanban.set_defaults(fn=cmd_enable_kanban)
 
     return parser
 

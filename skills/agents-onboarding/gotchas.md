@@ -12,7 +12,7 @@ Fix via `scripts/coolify.py` (base64-pipa o psql; o restart não monta curl com 
 
 ```sh
 python3 scripts/coolify.py list-apps --ssh root@<VPS_IP>                                          # ache o id
-python3 scripts/coolify.py set-fqdn  --ssh root@<VPS_IP> --app-id <id> --fqdn https://agentes.<seu-dominio>
+python3 scripts/coolify.py set-fqdn  --ssh root@<VPS_IP> --app-id <id> --fqdn https://agents.<seu-dominio>
 python3 scripts/coolify.py api-post  --base-url http://<VPS_IP>:8000 --token-file coolify.token --path /services/<uuid>/restart
 ```
 
@@ -154,4 +154,4 @@ Os polls que esperam uma ação do usuário no browser (`coolify.py wait-admin` 
 - **TTS:** precisa de chave ElevenLabs real.
 - **Visão:** precisa de chave Gemini válida.
 - **WhatsApp físico:** opcional; exige um número que o usuário controle. A integração Chatwoot→fazer.ai agents já é provada sem aparelho via Inbox API (etapa 10); o físico só confirma o transporte real.
-- **Kanban:** condicional à licença, **não** "opcional". Com licença disponível (CLI/`hub licenses`), habilitar é **happy-path** (licenciar no hub + Refresh; ver `references/chatwoot-hub-register.md`); imagem Pro sozinha não basta. Sem licença → OSS, sem Kanban.
+- **Kanban:** condicional à licença, **não** "opcional". Com licença disponível (CLI/`hub licenses`), habilitar é **happy-path** (ver `references/chatwoot-hub-register.md`), mas exige **três** coisas, todas necessárias: imagem Pro + assinatura casada no hub + feature ligada na conta. Duas pegadinhas que já travaram um onboarding com tudo "verde": (1) o hub casa a instância pelo **UUID de instalação**, não pelo host, e criar a instância com o host faz a assinatura verificar mas nunca conceder; (2) a assinatura só **autoriza** o Kanban, o flag por-conta é um passo separado (`enable-kanban`). O sinal autoritativo é `kanban_feature_enabled: true`, não "o Refresh rodou". Sem licença → OSS, sem Kanban.

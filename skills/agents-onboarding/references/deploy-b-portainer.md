@@ -26,7 +26,7 @@ Caddyfile a partir do env no boot (`CADDY_DOMAIN` → o app; `PORTAINER_DOMAIN` 
 
 ## Pré-requisitos
 
-- **DNS**: A-records pro FQDN do app (ex. `agentes.<domínio>`) e, se quiser o painel num domínio limpo,
+- **DNS**: A-records pro FQDN do app (ex. `agents.<domínio>`) e, se quiser o painel num domínio limpo,
   `portainer.<domínio>` → o IP do VPS. O ACME valida contra eles, então têm que resolver **antes** do deploy.
 - **Credenciais de registry** pras imagens privadas (configure uma vez no Portainer, passe `Registries:[id]`):
   - `ghcr.io` pra `ghcr.io/fazer-ai/agents` (e pgvector/baileys). Token do GitHub com `read:packages`.
@@ -72,7 +72,7 @@ pra o `pull_policy: always` autenticar.
 Gere o env, depois crie o stack a partir da string de compose:
 
 ```sh
-bun scripts/gen-onboarding-env.ts --public-url https://agentes.<domínio> --acme-email voce@<domínio>
+bun scripts/gen-onboarding-env.ts --public-url https://agents.<domínio> --acme-email voce@<domínio>
 # -> .env com CADDY_DOMAIN, as duas URLs de role do DB, JWT_SECRET, ENCRYPTION_KEY. Adicione
 #    PORTAINER_DOMAIN pra também servir o painel pelo mesmo Caddy.
 
@@ -89,8 +89,8 @@ migrate → serve**; o Caddy obtém o(s) cert(s) no primeiro boot. Atualize um s
 ## 4. Verificar
 
 ```sh
-curl -sS -o /dev/null -w '%{http_code} verify=%{ssl_verify_result}\n' https://agentes.<domínio>/api/health   # 200 verify=0
-echo | openssl s_client -connect agentes.<domínio>:443 -servername agentes.<domínio> 2>/dev/null \
+curl -sS -o /dev/null -w '%{http_code} verify=%{ssl_verify_result}\n' https://agents.<domínio>/api/health   # 200 verify=0
+echo | openssl s_client -connect agents.<domínio>:443 -servername agents.<domínio> 2>/dev/null \
   | openssl x509 -noout -issuer   # issuer= ... O=Let's Encrypt
 ```
 
@@ -134,5 +134,5 @@ escrever uma integração Chatwoot à mão, use `api-access-token`, nunca o unde
 
 ## O que entrega ao contrato
 
-Os 5 outputs do [contrato (1c)](01c-pick-tier.md): `agentes.`/`chatwoot.`/`langfuse.` em HTTPS, agents com as
+Os 5 outputs do [contrato (1c)](01c-pick-tier.md): `agents.`/`chatwoot.`/`langfuse.` em HTTPS, agents com as
 duas roles + token de `/setup`, admin token do Chatwoot, Langfuse+MinIO. → siga pra **etapa 6**.
