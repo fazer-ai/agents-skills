@@ -12,6 +12,15 @@ Achada a causa, ajuste na camada que a explica. Via **console** (editor do agent
 | Resposta sem fundamento na base | **Grounding/KB** | editor → Knowledge | `agent_tools_set` (grant RAG), `knowledge_*` |
 | Cadência/áudio/janela/agrupamento | **Behavior** | editor → Behavior | `agent_settings_set` |
 
+## Trocar/adaptar o system prompt (preserve a estrutura, troque só o conteúdo)
+
+O prompt é um **campo único** (`Agent.systemPrompt`); a "estrutura base" que o runtime garante (grounding da KB, variáveis `{{...}}`, contexto MCP, budget de ferramentas) é anexada **automaticamente** e não vive no texto do operador. Ao adaptar o prompt (do sample Maria pra outro negócio, ou reescrevendo o de um agente vivo):
+
+- **Preserve a estrutura base do prompt original**: as seções (identidade, tom, regras de atendimento, uso das ferramentas, políticas), a ordem e o formato. Não descarte o esqueleto que já funciona; troque o **conteúdo**, não a arquitetura.
+- **Troque só o conteúdo específico do negócio**: nome, serviços, horários, endereço, políticas, exemplos. Mantenha as instruções de uso de ferramentas (agenda, pagamento, KB) coerentes com as tools que o agente **realmente** tem.
+- **Pergunte ao usuário as informações necessárias** pela ferramenta de pergunta estruturada, **uma de cada vez** (nome do negócio, o que oferece, horários, políticas de agendamento/cancelamento, formas de pagamento…). Nunca invente dados nem deixe placeholders (`[preencher]`) no prompt aplicado.
+- **Preview primeiro** (`prompt_set` dry-run): mostre o texto final ao usuário e só aplique com o OK.
+
 ## Grants de ferramentas: replace-the-set
 
 O editor (`Tools` + `Knowledge`) edita **um** working set de grants e faz **PUT do set inteiro** (substitui, não acumula). O `agent_tools_set` segue o mesmo modelo.

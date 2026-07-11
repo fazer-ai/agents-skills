@@ -48,8 +48,8 @@
         "model": "",
         "baseURL": null,
         "enabled": true,
-        "provider": "gemini",
-        "credentialRef": "Google Gemini",
+        "provider": "openai",
+        "credentialRef": "OpenAI",
         "extractionPrompt": "Descreva objetivamente o conteúdo deste arquivo, transcrevendo todo o texto visível e os dados relevantes. Responda apenas com o conteúdo, sem comentários nem suposições."
       },
       "handoff": {
@@ -173,16 +173,12 @@
         "kind": "elevenlabs"
       },
       {
-        "name": "Google Gemini",
-        "kind": "gemini"
-      },
-      {
         "name": "Google OAuth2",
         "kind": "google_oauth"
       },
       {
         "name": "Asaas",
-        "kind": "generic"
+        "kind": "asaas"
       }
     ]
   },
@@ -201,7 +197,7 @@
           "calendarLabels": {
             "primary": "Agenda de consultas"
           },
-          "businessHoursId": "2354",
+          "businessHoursId": "Horário da Clínica Moreira",
           "slotDurationMinutes": 30,
           "appointmentReminders": {
             "enabled": true,

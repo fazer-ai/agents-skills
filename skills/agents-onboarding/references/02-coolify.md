@@ -101,7 +101,7 @@ docker exec -i coolify-db psql -U coolify -d coolify
 
 ## Projeto + ambiente
 
-Crie (ou reaproveite) um projeto com o **nome de exibição do usuário** (ex.: `clinica-moreira`) e o ambiente `production`. Os UUIDs (server/projeto/env/serviços) são **gerados a cada instalação**: descubra-os pela API/DB; nunca chumbe UUIDs de outra instalação.
+Crie (ou reaproveite) um projeto com o **nome padrão `fazer.ai agents`** (não perguntado; o operador renomeia depois no console se quiser) e o ambiente `production`. Os UUIDs (server/projeto/env/serviços) são **gerados a cada instalação**: descubra-os pela API/DB; nunca chumbe UUIDs de outra instalação.
 
 ## Registry privado do Harbor (só Pro)
 

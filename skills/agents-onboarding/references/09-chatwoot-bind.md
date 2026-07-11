@@ -32,6 +32,8 @@ Conecta as contas selecionadas (cria a instância + sincroniza os inboxes pra ag
 
 ## 3. Bindar o inbox ao agente (`inbox_bind`)
 
+> **Pré: o inbox precisa existir no Chatwoot.** Se o usuário ainda não criou a caixa de entrada (WhatsApp, widget de site, etc.), entregue o **link direto da página de criação**, nunca "vá em Configurações → Caixas de entrada": `<base_url_do_chatwoot>/app/accounts/<accountId>/settings/inboxes/new` (conta 1 no install padrão). O deep-link abre direto o assistente de novo canal; o usuário cria o inbox e volta pro bind. O mesmo link também está na tela **Canais** do console (botão "Criar caixa de entrada no Chatwoot", por conta).
+
 ```jsonc
 inbox_bind { "inbox_id":"<id do inbox no fazer.ai agents>", "agent_id":"<id do agente>" }   // dry_run:false pra aplicar
 ```

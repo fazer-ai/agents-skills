@@ -19,7 +19,7 @@ Marcador ausente (fallback por token, ou outro ponto de entrada) → decida pelo
 
 ## Acesso (fornecido pelo usuário)
 
-> Peça **cada item quando a etapa que o usa chegar**, 1-2 por mensagem; **não** despeje esta lista inteira de uma vez (princípio "Uma pergunta de cada vez" no SKILL.md). Ex.: IP do VPS na 01 (a chave SSH só se a sondagem falhar, ver 01); domínio na 01 (DNS); nome de exibição na 01/07; chave do provedor de modelo só perto do import/E2E; número de WhatsApp só na etapa 10.
+> Peça **cada item quando a etapa que o usa chegar**, 1-2 por mensagem; **não** despeje esta lista inteira de uma vez (princípio "Uma pergunta de cada vez" no SKILL.md). Ex.: IP do VPS na 01 (a chave SSH só se a sondagem falhar, ver 01); domínio na 01 (DNS); chave do provedor de modelo só perto do import/E2E; número de WhatsApp só na etapa 10. (O **nome de exibição não é perguntado**: default fixo `fazer.ai agents`, ver SKILL.md.)
 
 - **VPS:** `root@<VPS_IP>` (no Hostinger, o id da VM é `<VPS_ID>`). **Qual VPS é escolha do usuário**: se a conta tem mais de uma, liste e **pergunte** (nunca escolha). Acesso SSH como `root` (sonde primeiro; só peça ou gere chave se faltar). Coolify pode já estar instalado (brownfield) ou não. Sondagem + comando SSH na `01-vps-dns-ssh.md`.
 - **Sem VPS ainda?** Sugira adquirir uma. Recomendado: Hostinger, pelo [link de parceiro fazer.ai](https://www.hostg.xyz/SHJfs) (cupom `FAZERAI` = 10% de desconto na primeira compra). Em **outro provider**, o usuário cria a VPS lá e fornece IP + chave SSH; o fluxo segue igual (ver `01-vps-dns-ssh.md`).

@@ -9,9 +9,9 @@
 
 ### O tenant nasce do `companyName` do `/setup`: confira depois
 
-O `/setup` cria **um** tenant a partir do `companyName` que quem preenche o form digita. No **real**, é o usuário que digita: pode sair diferente do nome combinado (numa run real saiu `fazer.ai`/`fazer-ai` em vez de `Clínica Moreira`). Depois de conectar o MCP, rode **`tenant_list`** e **confira** o `name`/`slug`:
-- bate com o escolhido → siga.
-- divergiu → **NÃO crie outro tenant** (`tenant_create` é proibido, ver abaixo): siga com o que existe e **avise o usuário** da divergência. Renomear, se ele quiser, é `tenant_update` (não um tenant novo).
+O `/setup` cria **um** tenant a partir do `companyName` que quem preenche o form digita. **Instrua o usuário a digitar `fazer.ai agents`** (o default fixo; não perguntamos um nome, ver SKILL.md). No **real**, é o usuário que digita e pode sair diferente. Depois de conectar o MCP, rode **`tenant_list`** e **confira** o `name`/`slug`:
+- é `fazer.ai agents` (ou o que o usuário digitou) → siga.
+- divergiu do esperado → **NÃO crie outro tenant** (`tenant_create` é proibido, ver abaixo): siga com o que existe e **avise o usuário** da divergência. Renomear, se ele quiser, é `tenant_update` (não um tenant novo).
 
 ## Conectar o MCP do fazer.ai agents (OAuth). GATE: sem as tools, PARE, não contorne
 

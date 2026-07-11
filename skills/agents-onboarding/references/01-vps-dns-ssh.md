@@ -20,7 +20,7 @@ ssh -o ConnectTimeout=12 -o BatchMode=yes -o StrictHostKeyChecking=accept-new ro
 python3 scripts/sshkey.py generate --name fazer-ai-agents --comment fazer-ai-onboarding
 ```
 Saída JSON com `public_key` (idempotente: se a chave já existe, só reimprime). **Use o nome FIXO `fazer-ai-agents`, literal, nunca um sufixo inventado nem um placeholder** (`fazer-ai-<algo>`): com nome estável o generate reusa a MESMA chave em toda run, e o operador cola a pública **uma vez só**. Nome novo a cada vez faz a chave que ele colou "sumir" (o agente passa a usar outra) e força re-paste, o atrito recorrente aqui. Mostre a linha `ssh-ed25519 …` e **guie o cadastro no painel em passos curtos** (você **não** faz isto pela API, ver *Nota MCP*), em linguagem clara: "gerei uma chave de acesso; cole a linha abaixo no painel da sua VPS pra eu conseguir entrar":
-- **Hostinger:** painel da VPS → card **"Chave SSH"** → **"Gerenciar"** → **"+ Chave SSH"** → cole a chave pública → **"Salvar"**.
+- **Hostinger:** monte o link direto do hPanel pra **esta** VPS (você já tem o `<VPS_ID>` do `VPS_getVirtualMachinesV1`) e entregue pronto ao operador: `https://hpanel.hostinger.com/vps/<VPS_ID>/overview`. De lá → card **"Chave SSH"** → **"Gerenciar"** → **"+ Chave SSH"** → cole a chave pública → **"Salvar"**. (O link poupa o operador de caçar a VPS certa quando a conta tem mais de uma.)
 - **Outro provedor:** o equivalente no painel dele ("SSH Keys" / "Add SSH key" da VPS).
 
 **3. Espere o cadastro e confirme sozinho.** Em vez de pedir "me avise quando cadastrar", deixe o helper **aguardar** o acesso (faz poll do SSH e detecta sozinho quando a chave entra). **Rode em background, não em foreground** (o poll trava o seu turno enquanto o operador cola a chave); retome quando sair:

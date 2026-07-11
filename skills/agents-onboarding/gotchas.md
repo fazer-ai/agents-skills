@@ -152,6 +152,6 @@ Os polls que esperam uma ação do usuário no browser (`coolify.py wait-admin` 
 ## Pendências conhecidas (não bloqueiam o core)
 
 - **TTS:** precisa de chave ElevenLabs real.
-- **Visão:** precisa de chave Gemini válida.
+- **Visão:** usa a **mesma chave OpenAI** do modelo/STT (o sample configura visão via OpenAI, `gpt-4o`); não precisa de chave separada. OpenAI lê imagens, não documentos.
 - **WhatsApp físico:** opcional; exige um número que o usuário controle. A integração Chatwoot→fazer.ai agents já é provada sem aparelho via Inbox API (etapa 10); o físico só confirma o transporte real.
 - **Kanban:** condicional à licença, **não** "opcional". Com licença disponível (CLI/`hub licenses`), habilitar é **happy-path** (ver `references/chatwoot-hub-register.md`), mas exige **três** coisas, todas necessárias: imagem Pro + assinatura casada no hub + feature ligada na conta. Duas pegadinhas que já travaram um onboarding com tudo "verde": (1) o hub casa a instância pelo **UUID de instalação**, não pelo host, e criar a instância com o host faz a assinatura verificar mas nunca conceder; (2) a assinatura só **autoriza** o Kanban, o flag por-conta é um passo separado (`enable-kanban`). O sinal autoritativo é `kanban_feature_enabled: true`, não "o Refresh rodou". Sem licença → OSS, sem Kanban.

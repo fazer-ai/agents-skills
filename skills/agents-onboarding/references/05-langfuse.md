@@ -43,3 +43,30 @@ Status 500 = quase sempre MinIO/S3 ausente.
 O wiring é **por MCP**, num tool só: `langfuse_connect` recebe `public_key`/`secret_key`/`base_url` **inline** (as keys que você semeou), cria a credencial no vault **já preenchida** (`kind:"langfuse"`, `{publicKey, secretKey}` + `baseUrl`) e liga o tracing no tenant-settings. É dry-run por padrão: revise o preview (keys redigidas) e reenvie com `dry_run:false` pra aplicar. Mesmo padrão do `deployment_connect` do Chatwoot (segredo de infra inline). Como as keys já existem, a credencial nasce **preenchida** (NÃO `pending`): uma entry pending não resolve o segredo e o tenant-settings rejeita com `credential ref not found`. (No vault o campo é `baseUrl` camelCase, ver `gotchas.md`; doc do tool em `docs/mcp.md`.)
 
 > **Ao pedir o OK do usuário** pra aplicar, fale do benefício, não do mecanismo: "vou ligar o painel que registra as conversas do agente, pra você acompanhar e depurar depois". **Não** cite `langfuse_connect`/"tracing"/"tenant-settings"/keys. Frases boas × ruins em `guardrails.md`.
+
+## Resetar a senha do Langfuse (fora da UI, break-glass)
+
+O caminho normal de troca de senha é a **UI do Langfuse** (o operador troca no 1º acesso; a troca sobrevive a redeploys, o `LANGFUSE_INIT_USER_PASSWORD` fica inerte). Só caia aqui quando o operador **perdeu o acesso** e não consegue logar pra trocar. O Langfuse v3 **não tem env/CLI** pra rotacionar a senha depois do seed: o único jeito é reescrever o hash **bcrypt** na coluna `users.password` do Postgres do Langfuse (o serviço `postgres` do stack do Langfuse). O Langfuse verifica com `bcryptjs`, que aceita o prefixo `$2b$` que o Bun emite (cost 12 = o mesmo do Langfuse).
+
+Use o `scripts/langfuse-set-password.py` (não monte o `docker exec`/`psql` à mão): ele faz tudo numa conexão SSH só, com os payloads sempre por stdin (sem o footgun de aspas comidas/BOM que o `remote.py` existe pra matar), e **é dry-run por padrão** — confirma o schema read-only, gera o hash e imprime o `UPDATE` **sem escrever nada**. A senha **nunca** passa por argv (nem no `ssh`, nem no `docker exec`, nem no container): vai por stdin (arquivo `0600` ou prompt interativo). Ache os nomes reais dos containers com `docker ps` (sob Coolify ganham sufixo): o **`agents`** roda `…/agents-pro` (tem o Bun que gera o hash) e o **Postgres do Langfuse** é o `postgres` do stack do Langfuse — **NÃO** o Postgres do agents, **NÃO** o `coolify-db`.
+
+```sh
+printf '<NOVA_SENHA>' > /tmp/lfpw && chmod 600 /tmp/lfpw   # a senha fora do argv
+
+# 1) DRY-RUN (não escreve): confirma users.password + gera o hash no container agents + mostra o SQL
+python3 scripts/langfuse-set-password.py \
+  --ssh root@<VPS_IP> --ssh-opts "-i ~/.ssh/fazer-ai-agents -o IdentitiesOnly=yes" \
+  --agents-container <agents> --langfuse-pg <postgres-langfuse> \
+  --email <email> --password-file /tmp/lfpw
+
+# 2) APLICA (mutação): idem + escreve o UPDATE e confirma `UPDATE 1`
+python3 scripts/langfuse-set-password.py \
+  --ssh root@<VPS_IP> --ssh-opts "-i ~/.ssh/fazer-ai-agents -o IdentitiesOnly=yes" \
+  --agents-container <agents> --langfuse-pg <postgres-langfuse> \
+  --email <email> --password-file /tmp/lfpw --apply
+rm -f /tmp/lfpw
+```
+
+O e-mail é o do operador (o mesmo do Chatwoot/seed). Depois do `--apply`, ele loga em **`/auth/sign-in`** com a nova senha.
+
+> Isto **muta o banco do Langfuse** (não é o Postgres do fazer.ai agents): o script é dry-run por padrão de propósito — peça o **OK explícito** do operador antes do `--apply` e só rode quando ele pediu o reset. **Por baixo** ele confirma o schema (`\d users` tem `password : text` — validado ao vivo, Langfuse v3 + agents-pro), gera o hash com o Bun do `agents` (**não** no container do Langfuse: o `bcryptjs` dele mora num caminho pnpm interno que `require` não resolve de `/app`) e aplica via heredoc de delimitador aspado (o `$` do hash não sofre expansão). Fallback manual, se precisar sem o script: `docker exec -e NP='<senha>' <agents> bun -e 'process.stdout.write(await Bun.password.hash(process.env.NP,{algorithm:"bcrypt",cost:12}))'` pro hash, e `remote.py --in-container <postgres-langfuse> --exec 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' --script-file lf.sql` pro `UPDATE`.
