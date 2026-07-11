@@ -64,6 +64,20 @@ DEFAULT_SCRIPTS = [
     ],
 ]
 
+# Realistic contact names (so the simulated conversations read like real customers in Chatwoot, not
+# "Sim Cliente 01"). Picked deterministically by index; the unique key stays the identifier, so names
+# may repeat past the list length (a numeric suffix keeps them distinct without looking robotic).
+SIM_NAMES = [
+    "Ana Beatriz Ribeiro", "Carlos Eduardo Nunes", "Mariana Oliveira",
+    "João Pedro Santos", "Fernanda Lima", "Rafael Almeida",
+    "Juliana Costa", "Bruno Carvalho", "Patrícia Souza",
+    "Lucas Martins", "Camila Rodrigues", "Thiago Ferreira",
+    "Larissa Gomes", "Gustavo Barbosa", "Beatriz Cardoso",
+    "Rodrigo Pereira", "Amanda Rocha", "Felipe Araújo",
+    "Isabela Ramos", "Marcelo Dias", "Vanessa Correia",
+    "Diego Teixeira", "Natália Freitas", "Leonardo Pinto",
+]
+
 
 class Chatwoot:
     """Thin Chatwoot Application API client (api_access_token auth), stdlib-only."""
@@ -152,7 +166,9 @@ class Chatwoot:
 
 def run_persona(cw, inbox_id, index, script, activate_test, min_delay, max_delay,
                 poll_replies, poll_timeout, run_tag, log_lock):
-    name = f"Sim Cliente {index + 1:02d}"
+    base = SIM_NAMES[index % len(SIM_NAMES)]
+    cycle = index // len(SIM_NAMES)
+    name = base if cycle == 0 else f"{base} {cycle + 1}"
     identifier = f"sim-{run_tag}-{index + 1:02d}"
     result = {"persona": name, "ok": False, "messages_sent": 0, "replies": 0}
 

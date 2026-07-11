@@ -191,12 +191,8 @@
         "name": "Google Calendar",
         "config": {
           "timeZone": "America/Sao_Paulo",
-          "calendarIds": [
-            "primary"
-          ],
-          "calendarLabels": {
-            "primary": "Agenda de consultas"
-          },
+          "calendarIds": [],
+          "calendarLabels": {},
           "businessHoursId": "Horário da Clínica Moreira",
           "slotDurationMinutes": 30,
           "appointmentReminders": {
