@@ -7,6 +7,11 @@
 # (webhook -> debounce -> turn -> real model -> outgoing reply) runs for real, so this exercises the
 # production path (including the agent's TOOLS) under concurrency, without any physical device.
 #
+# MULTI-TURN by default: each persona sends a message, WAITS for the agent's (possibly multi-balloon) reply,
+# then sends the next — a real back-and-forth, so every message is its own turn. Pass --burst to instead fire
+# all of a persona's messages at once (the debounce-coalescing load test), or --no-poll to fire without
+# waiting at all (pure throughput). Realistic contact names (SIM_NAMES) so conversations don't read as fake.
+#
 # Bypassing /teste: an agent in `mode: "test"` stays silent in a conversation until the customer sends
 # `/teste` (which stamps `testActivatedAt` for THAT conversation). So by default this sends `/teste` as the
 # first message of each simulated conversation, which "contorna" test mode WITHOUT flipping the real agent to
@@ -164,17 +169,44 @@ class Chatwoot:
         )
 
 
-def run_persona(cw, inbox_id, index, script, activate_test, min_delay, max_delay,
-                poll_replies, poll_timeout, run_tag, log_lock):
+def wait_for_reply(cw, conv_id, baseline, timeout, settle):
+    """Block until the agent posts a NEW outgoing message (count beyond `baseline`), then let a split
+    reply's extra balloons settle before returning. Returns the new outgoing count (== baseline on
+    timeout). This is what makes the run MULTI-TURN: we wait for the agent to answer THIS message before
+    sending the next, so each message is its own real turn (not coalesced with the others by debounce)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        count = cw.outgoing_count(conv_id)
+        if count > baseline:
+            # A reply started; a split reply arrives as several balloons over a few seconds, so keep
+            # waiting until the count stops growing for `settle` seconds before treating the turn done.
+            stable_until = time.time() + settle
+            while time.time() < stable_until:
+                time.sleep(1)
+                newer = cw.outgoing_count(conv_id)
+                if newer > count:
+                    count = newer
+                    stable_until = time.time() + settle
+            return count
+        time.sleep(2)
+    return baseline
+
+
+def run_persona(cw, inbox_id, index, script, activate_test, think_min, think_max,
+                wait_replies, turn_timeout, settle, burst, run_tag, log_lock, detect_timeout):
     base = SIM_NAMES[index % len(SIM_NAMES)]
     cycle = index // len(SIM_NAMES)
     name = base if cycle == 0 else f"{base} {cycle + 1}"
     identifier = f"sim-{run_tag}-{index + 1:02d}"
-    result = {"persona": name, "ok": False, "messages_sent": 0, "replies": 0}
+    result = {"persona": name, "ok": False, "messages_sent": 0, "replies": 0, "turns_answered": 0}
 
     def log(msg):
         with log_lock:
             print(f"  [{name}] {msg}", file=sys.stderr, flush=True)
+
+    # Deterministic per-persona think time (no RNG): step across [min,max] by index.
+    span = max(0.0, think_max - think_min)
+    think = think_min + (span * ((index % 5) / 4.0) if span else 0.0)
 
     try:
         contact_id, source_id = cw.create_contact(inbox_id, name, identifier)
@@ -182,31 +214,60 @@ def run_persona(cw, inbox_id, index, script, activate_test, min_delay, max_delay
         result["conversation_id"] = conv_id
         log(f"conversa {conv_id} criada")
 
+        seen = 0
         if activate_test:
-            # Opt this conversation into responses even if the agent is in test mode.
+            # /teste opts THIS conversation into replies (test mode). Wait for its ack so it lands as its
+            # own turn and is not coalesced with the first real message.
             cw.send_incoming(conv_id, "/teste")
-            time.sleep(min_delay)
-
-        # Deterministic per-persona spread of the send delay (no RNG): step across [min,max] by index.
-        span = max(0.0, max_delay - min_delay)
-        delay = min_delay + (span * ((index % 5) / 4.0) if span else 0.0)
-        for content in script:
-            cw.send_incoming(conv_id, content)
-            result["messages_sent"] += 1
-            time.sleep(delay)
-
-        if poll_replies:
-            deadline = time.time() + poll_timeout
-            while time.time() < deadline:
-                replies = cw.outgoing_count(conv_id)
-                if replies > 0:
-                    result["replies"] = replies
-                    break
-                time.sleep(2)
+            if wait_replies:
+                seen = wait_for_reply(cw, conv_id, seen, turn_timeout, settle)
             else:
-                result["replies"] = cw.outgoing_count(conv_id)
-            log(f"{result['replies']} resposta(s) do agente observada(s)")
+                time.sleep(think)
 
+        if burst or not wait_replies:
+            # Burst mode: fire every message so debounce coalesces them into ~one turn (this is the load
+            # test for the debounce/coalescing path, not a multi-turn conversation).
+            for content in script:
+                cw.send_incoming(conv_id, content)
+                result["messages_sent"] += 1
+                time.sleep(think)
+            if wait_replies:
+                final = wait_for_reply(cw, conv_id, seen, turn_timeout, settle)
+                result["replies"] = max(0, final - seen)
+                result["turns_answered"] = 1 if final > seen else 0
+        else:
+            # Multi-turn (default): one real turn per message — send, wait for the agent's (possibly
+            # multi-balloon) reply, then send the next. Exercises sequential turns per conversation while
+            # all personas run concurrently.
+            activated = activate_test
+            for i, content in enumerate(script):
+                time.sleep(think)
+                cw.send_incoming(conv_id, content)
+                result["messages_sent"] += 1
+                # Self-heal a wrong --no-activate-test: on the FIRST message of a not-yet-activated agent,
+                # wait only --detect-timeout; persistent silence means the agent is in test mode, so send
+                # /teste and resend once. Stops a mis-set flag from causing a silent 0-reply run.
+                probe = i == 0 and not activated and detect_timeout > 0
+                first_wait = min(detect_timeout, turn_timeout) if probe else turn_timeout
+                got = wait_for_reply(cw, conv_id, seen, first_wait, settle)
+                if got == seen and probe:
+                    log(f"sem resposta em {first_wait:.0f}s — provável modo teste; "
+                        "ativando com /teste e reenviando")
+                    cw.send_incoming(conv_id, "/teste")
+                    seen = max(seen, wait_for_reply(cw, conv_id, seen, turn_timeout, settle))
+                    cw.send_incoming(conv_id, content)
+                    got = wait_for_reply(cw, conv_id, seen, turn_timeout, settle)
+                    activated = True
+                if got > seen:
+                    result["replies"] += got - seen
+                    result["turns_answered"] += 1
+                    seen = got
+                else:
+                    log(f"turno {i + 1}/{len(script)}: sem resposta em {turn_timeout:.0f}s")
+
+        if wait_replies:
+            log(f"{result['turns_answered']}/{len(script)} turno(s) respondido(s) "
+                f"({result['replies']} balão(ões))")
         result["ok"] = True
     except Exception as e:  # noqa: BLE001 - one persona failing must not kill the run
         result["error"] = str(e)
@@ -227,12 +288,21 @@ def main():
     ap.add_argument("--count", type=int, default=15, help="Number of concurrent customers (default 15)")
     ap.add_argument("--script", help="JSON file: array of arrays of strings (per-persona message scripts)")
     ap.add_argument("--no-activate-test", dest="activate_test", action="store_false",
-                    help="Do NOT send /teste first (use for a production-mode agent)")
-    ap.add_argument("--min-delay", type=float, default=1.0, help="Min seconds between a persona's messages")
-    ap.add_argument("--max-delay", type=float, default=4.0, help="Max seconds between a persona's messages")
-    ap.add_argument("--no-poll", dest="poll_replies", action="store_false",
-                    help="Do NOT poll for agent replies (just fire messages)")
-    ap.add_argument("--poll-timeout", type=float, default=60.0, help="Seconds to wait for a reply per persona")
+                    help="Do NOT send /teste first (production-mode agent). Self-healing: if the first "
+                         "message stays silent for --detect-timeout, /teste is sent automatically anyway")
+    ap.add_argument("--min-delay", type=float, default=1.0, help="Min think time before a persona's next message (s)")
+    ap.add_argument("--max-delay", type=float, default=4.0, help="Max think time before a persona's next message (s)")
+    ap.add_argument("--burst", action="store_true",
+                    help="Fire all messages at once (debounce-coalesce test) instead of multi-turn")
+    ap.add_argument("--no-poll", dest="wait_replies", action="store_false",
+                    help="Do NOT wait for replies (fire only; disables the multi-turn sequencing)")
+    ap.add_argument("--poll-timeout", type=float, default=120.0, help="Per-turn seconds to wait for a reply")
+    ap.add_argument("--settle", type=float, default=4.0,
+                    help="Seconds to let a split reply's extra balloons settle before the next turn")
+    ap.add_argument("--detect-timeout", type=float, default=60.0,
+                    help="With --no-activate-test: if the first message gets no reply within this many "
+                         "seconds, assume the agent is in test mode, send /teste and resend once "
+                         "(self-heals a wrong --no-activate-test). 0 disables the auto-heal")
     ap.add_argument("--run-tag", default=str(int(time.time())), help="Tag appended to contact identifiers")
     ap.add_argument("--insecure", action="store_true", help="Skip TLS verification (staging/self-signed)")
     args = ap.parse_args()
@@ -251,9 +321,10 @@ def main():
 
     cw = Chatwoot(args.base_url, token, args.account_id, insecure=args.insecure)
     log_lock = threading.Lock()
+    mode = "burst" if args.burst else ("multi-turno" if args.wait_replies else "fire-only")
     print(
         f"Simulando {args.count} cliente(s) concorrente(s) no inbox {args.inbox_id} "
-        f"(conta {args.account_id}); activate-test={args.activate_test}",
+        f"(conta {args.account_id}); modo={mode}; activate-test={args.activate_test}",
         file=sys.stderr,
         flush=True,
     )
@@ -264,7 +335,8 @@ def main():
             pool.submit(
                 run_persona, cw, args.inbox_id, i, scripts[i % len(scripts)],
                 args.activate_test, args.min_delay, args.max_delay,
-                args.poll_replies, args.poll_timeout, args.run_tag, log_lock,
+                args.wait_replies, args.poll_timeout, args.settle, args.burst,
+                args.run_tag, log_lock, args.detect_timeout,
             )
             for i in range(args.count)
         ]
@@ -273,21 +345,37 @@ def main():
 
     results.sort(key=lambda r: r["persona"])
     ok = sum(1 for r in results if r["ok"])
-    replied = sum(1 for r in results if r.get("replies", 0) > 0)
+    replied = sum(1 for r in results if r.get("turns_answered", 0) > 0)
+    total_turns = sum(len(scripts[i % len(scripts)]) for i in range(args.count))
+    answered_turns = sum(r.get("turns_answered", 0) for r in results)
     summary = {
         "requested": args.count,
         "succeeded": ok,
         "with_reply": replied,
+        "mode": mode,
         "messages_sent": sum(r["messages_sent"] for r in results),
+        "turns_answered": answered_turns,
+        "turns_total": total_turns,
         "results": results,
     }
     print("RESULT_JSON:" + json.dumps(summary, ensure_ascii=False))
+    turns_note = (
+        f"; {answered_turns}/{total_turns} turno(s) respondido(s)" if args.wait_replies else ""
+    )
     print(
-        f"\n{ok}/{args.count} conversa(s) OK; {replied} com resposta do agente. "
+        f"\n{ok}/{args.count} conversa(s) OK; {replied} com resposta do agente{turns_note}. "
         f"Confira o USO DAS FERRAMENTAS no /logs (ExecutionLog) e no Langfuse; "
         f"as conversas aparecem no Chatwoot na conta {args.account_id}.",
         file=sys.stderr,
     )
+    if args.wait_replies and answered_turns == 0:
+        print(
+            "AVISO: zero respostas em todas as conversas. O modo teste é contornado automaticamente "
+            "(auto /teste no multi-turno), então isto aponta OUTRA causa: agente desabilitado, sem "
+            "modelo/credencial configurada, ou o Agent Bot não está atribuído a este inbox. "
+            "Cheque o /logs do agente.",
+            file=sys.stderr,
+        )
     # Non-zero exit if any persona failed, so callers/CI can gate on it.
     sys.exit(0 if ok == args.count else 1)
 

@@ -19,13 +19,20 @@ python3 scripts/simulate-load.py \
   --count 15
 ```
 
-Cada persona cria um contato + conversa e injeta mensagens **incoming**; a cadeia real (webhook → debounce → turn → modelo → resposta **outgoing**) roda para cada uma. O script fecha com `RESULT_JSON:{...}` (quantas OK, quantas tiveram resposta, mensagens enviadas) e sai `!= 0` se alguma persona falhou.
+Cada persona cria um contato + conversa e conduz uma conversa **multi-turno** (padrão): manda uma mensagem, **espera a resposta** do agente, e só então manda a próxima — cada mensagem vira um turno real. A cadeia real (webhook → debounce → turn → modelo → resposta **outgoing**) roda para cada turno. O script fecha com `RESULT_JSON:{...}` (quantas conversas OK, quantas responderam, `turns_answered/turns_total`) e sai `!= 0` se alguma persona falhou. Os contatos usam **nomes realistas** (não "Sim Cliente 01"), pra conversa não parecer fake no Chatwoot.
+
+## Multi-turno (padrão) vs rajada
+
+- **Multi-turno (padrão):** send → aguarda a resposta (inclusive os balões do **split**, com `--settle`) → próxima mensagem. É o que testa a conversa real sob concorrência (o agente segurando N diálogos sequenciais ao mesmo tempo). `--poll-timeout` é o tempo máximo de espera **por turno** (default 120s); `--min-delay`/`--max-delay` são o "tempo de digitação" antes de cada mensagem.
+- **`--burst`:** dispara todas as mensagens da persona de uma vez (o debounce coalesce em ~um turno). Use pra estressar **só o debounce/coalescing**, não o diálogo.
+- **`--no-poll`:** dispara sem esperar resposta nenhuma (throughput puro); desliga o sequenciamento multi-turno.
 
 ## Contornar o modo `/teste` (padrão)
 
 Um agente em `mode: "test"` fica **em silêncio** numa conversa até chegar um `/teste` (que ativa só **aquela** conversa). Por isso o script, por padrão, manda `/teste` como **1ª mensagem de cada conversa**: contorna o modo teste **sem** tirar o agente de teste (cada conversa se auto-ativa, o tráfego real segue intocado). É o jeito seguro de simular num agente de teste.
 
 - Agente já em **produção**: passe `--no-activate-test` (ele já responde; o `/teste` viraria só ruído).
+- **À prova de erro (auto-heal):** mesmo com `--no-activate-test`, se a 1ª mensagem ficar **sem resposta** por `--detect-timeout` (padrão 60s), o script assume modo teste, manda `/teste` sozinho e reenvia. Assim um `--no-activate-test` passado por engano num agente de teste **não** vira uma rodada silenciosa de 0 respostas (foi o que evitou um falso negativo aqui). Se ainda assim der 0 respostas, a causa é outra (agente desabilitado, sem modelo/credencial, ou Agent Bot não atribuído ao inbox) e o script avisa no fim. Assim você nunca depende de acertar o modo do agente de antemão.
 
 ## Garantir que o agente TESTA AS FERRAMENTAS
 
