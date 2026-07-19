@@ -94,15 +94,17 @@ def decide(service):
 
 print("\n=== Per-service decision for the agents onboarding ===")
 # Chatwoot has TWO valid variants: chatwoot-pro (Harbor image, hub subscription) and chatwoot OSS
-# (public image). Both satisfy the agents integration (Agent Bot API). Pro adds Baileys WhatsApp + Kanban.
+# (public image). Both satisfy the agents integration (Agent Bot API). Pro adds Kanban (private image);
+# Baileys (baileys-api) ships in our fork on BOTH editions, but a brownfield "oss" hit may be upstream
+# Chatwoot (any non-pro image), so Baileys is only assured on our fork.
 # So OSS is REUSABLE, not incompatible; an absent Chatwoot installs pro-if-subscribed else oss.
 def decide_chatwoot():
     pro = [h for h in inv.get("chatwoot-pro", []) if h["health"] == "healthy"]
     oss = [h for h in inv.get("chatwoot-oss", []) if h["health"] == "healthy"]
     if pro:
-        return "PRESENT(pro)+healthy -> REUSE (Baileys/Kanban available)"
+        return "PRESENT(pro)+healthy -> REUSE (pro image; Kanban + Baileys)"
     if oss:
-        return "PRESENT(oss)+healthy -> REUSE (OSS; no Baileys/Kanban, use official WA channels)"
+        return "PRESENT(oss)+healthy -> REUSE (OSS; no Kanban; Baileys if it's our fork)"
     if inv.get("chatwoot-pro") or inv.get("chatwoot-oss"):
         return "PRESENT+unhealthy -> flag/investigate"
     return "ABSENT -> install (pro if hub subscription, else oss)"

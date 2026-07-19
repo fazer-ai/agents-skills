@@ -1,6 +1,7 @@
 # Chatwoot for fazer.ai: COOLIFY flavor (magic vars; Coolify auto-generates the SERVICE_* secrets).
 # Edition by CHATWOOT_IMAGE: default = Pro (private Harbor image); for OSS set
-# CHATWOOT_IMAGE=ghcr.io/fazer-ai/chatwoot:latest (our public fork) AND drop the baileys-api service.
+# CHATWOOT_IMAGE=ghcr.io/fazer-ai/chatwoot:latest (our public fork). Baileys (baileys-api) runs in
+# BOTH editions — its image is public, so OSS keeps it.
 # Pro pull needs the Harbor registry credential configured in Coolify (hub: per-user credential); OSS needs none.
 # Set the service Domain in Coolify to your Chatwoot FQDN (fills SERVICE_URL_CHATWOOT).
 # This is the compose validated in the RUN 2 Coolify deploy; the generic/Portainer flavor is ./docker-compose.yml.

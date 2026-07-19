@@ -5,12 +5,12 @@ The inbox fazer.ai agents plugs into. The onboarding installs Chatwoot as part o
 
 | Edition | Image | When | Extra features |
 | --- | --- | --- | --- |
-| **Pro** | `harbor.fazer.ai/chatwoot/fazer-ai/chatwoot-pro` (private Harbor) | operator **has a hub license** | Baileys WhatsApp provider, Kanban |
-| **OSS** | `ghcr.io/fazer-ai/chatwoot` (our public fork) | **no** hub subscription | standard Chatwoot (official WhatsApp Cloud API, etc.) |
+| **Pro** | `harbor.fazer.ai/chatwoot/fazer-ai/chatwoot-pro` (private Harbor) | operator **has a hub license** | Kanban (+ other Pro-image features) |
+| **OSS** | `ghcr.io/fazer-ai/chatwoot` (our public fork) | **no** hub subscription | standard Chatwoot + Baileys WhatsApp provider |
 
 **Both editions work with fazer.ai agents**: the integration is the standard Chatwoot Agent Bot + API
 (see `docs/chatwoot.md`). OSS is **not** a downgrade of compatibility, only of
-Pro-exclusive channels/features.
+Pro-exclusive features (Kanban). The Baileys WhatsApp provider ships in **both** editions.
 
 **Edition source (in order).** The onboarding CLI captures the operator's choice up front and writes it to
 `~/.fazer-ai/onboarding.json` (`{ "chatwootTier": "pro" | "community", "chatwootLicenseId": "<id>" }`).
@@ -28,8 +28,8 @@ intent the hub can't express: an operator may own a license yet still pick OSS f
 | `docker-compose.coolify.yml` | **Coolify** (magic vars; secrets auto-generated). Pro image by default. |
 | `.env.example` | Template for the generic flavor. `cp .env.example .env`, fill every `CHANGE_ME`. |
 
-Topology (both): `chatwoot` (web) + `sidekiq` + `postgres` (pgvector) + `redis`, plus `baileys-api`
-**only in Pro** (compose profile `pro`).
+Topology (both): `chatwoot` (web) + `sidekiq` + `postgres` (pgvector) + `redis` + `baileys-api`
+(the Baileys WhatsApp provider, **both editions** — public image).
 
 ## Deploy (generic: Portainer / plain Docker)
 
@@ -39,14 +39,14 @@ cp .env.example .env        # fill every CHANGE_ME (openssl rand -hex 64 / -hex 
 # OSS (no subscription):
 docker compose up -d
 
-# Pro (hub subscription): authenticate to Harbor first, then enable the pro profile + image.
+# Pro (hub subscription): authenticate to Harbor first, then set the Pro image.
 docker login harbor.fazer.ai          # username + secret from the hub (generate_install_script)
 CHATWOOT_IMAGE=harbor.fazer.ai/chatwoot/fazer-ai/chatwoot-pro:latest \
-COMPOSE_PROFILES=pro docker compose up -d
+docker compose up -d
 ```
 
 **Portainer**: paste `docker-compose.yml` as a Stack and provide the same variables in the Stack env
-editor (for Pro, add `CHATWOOT_IMAGE` + `COMPOSE_PROFILES=pro` and register the Harbor credential under
+editor (for Pro, add `CHATWOOT_IMAGE` and register the Harbor credential under
 Registries first, or `Registries:[<id>]` in the API). Front `chatwoot.<domain>` with a TLS proxy: the
 fazer.ai agents [`docker-compose.portainer.yml`](../docker-compose.portainer.yml) bundled Caddy can do
 this (point a Caddy site at the published `CHATWOOT_PORT`); see the `agents-onboarding` skill (`references/deploy-b-portainer.md`).

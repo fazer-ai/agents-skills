@@ -31,7 +31,7 @@ python3 scripts/remote.py --ssh root@<VPS_IP> --ssh-opts "-i <chave>" --script-f
 | Serviço | Imagem (fingerprint) | Saúde = todos healthy | Versão |
 |---|---|---|---|
 | **Coolify** | `coollabsio/coolify` (+ `coolify-db`/`-redis`/`-realtime`, `-proxy`=`traefik`) | container `coolify` + API `:8000`=200 | tag da imagem (ex. `:4.1.2`) |
-| **Chatwoot** | imagem com `chatwoot` (+ `sidekiq`, e `baileys-api` pro WhatsApp) | `chatwoot` + `sidekiq` Up | tag (`:latest` → ver via `/version`) |
+| **Chatwoot** | imagem com `chatwoot` (+ `sidekiq`, e `baileys-api` para WhatsApp) | `chatwoot` + `sidekiq` Up | tag (`:latest` → ver via `/version`) |
 | **Langfuse** | `langfuse/langfuse` (+ `-worker`, `clickhouse`, **`minio`**) | web+worker+clickhouse+minio Up | tag (ex. `:3`) |
 | **fazer.ai agents** | `ghcr.io/fazer-ai/agents` (+ `pgvector`) | container Up + `/api/health` | tag |
 

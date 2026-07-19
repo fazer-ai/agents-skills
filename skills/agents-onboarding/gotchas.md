@@ -97,9 +97,9 @@ Não há heredoc (`<<'EOF'` é só POSIX) nem `<` de stdin no PowerShell, por is
 
 A edição **Pro** do fazer.ai agents (`edition: "pro"`, marcador) usa imagem privada no Harbor (projeto `agents`), liberada **só pra membros da comunidade** (`isCommunityGrant`). Uma licença Chatwoot Pro **avulsa** NÃO desbloqueia o fazer.ai agents. A robot do Harbor é **per-user** (cobre a união dos projetos a que o usuário tem acesso): se Chatwoot e o fazer.ai agents são ambos Pro, é **um único** `docker login`: não logue duas vezes. `free` = imagem pública, **sem** `docker login`.
 
-### Chatwoot OSS não faz `docker login` nem usa Baileys
+### Chatwoot OSS não faz `docker login` (mas inclui Baileys)
 
-`chatwootTier: "community"` (OSS) usa a imagem pública `ghcr.io/fazer-ai/chatwoot` (nosso fork), **sem** `docker login` no Harbor e **sem** o `baileys-api` (`COMPOSE_PROFILES` vazio). Só o `pro` faz `docker login` no Harbor + imagem privada `chatwoot-pro` + Baileys. **Não** rode `docker login` nem provisione credencial do Harbor no caminho OSS (não há licença, e o pull público não precisa dela).
+`chatwootTier: "community"` (OSS) usa a imagem pública `ghcr.io/fazer-ai/chatwoot` (nosso fork), **sem** `docker login` no Harbor. O `baileys-api` **roda também no OSS** (imagem pública `ghcr.io/fazer-ai/baileys-api`, parte do fork — **não** remova). Só o `pro` faz `docker login` no Harbor + imagem privada `chatwoot-pro` (o que o Pro adiciona é o **Kanban**, não o Baileys). **Não** rode `docker login` nem provisione credencial do Harbor no caminho OSS (não há licença, e o pull público não precisa dela).
 
 ## Langfuse
 

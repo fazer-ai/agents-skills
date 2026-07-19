@@ -1,10 +1,11 @@
 # Chatwoot for fazer.ai: GENERIC flavor (Portainer / EasyPanel / Dokploy / plain Docker).
 #
 # ONE file, BOTH editions, selected by env (see ./README.md):
-#   - OSS (no hub subscription): defaults, our public `ghcr.io/fazer-ai/chatwoot` fork, no Baileys.
-#   - Pro (hub subscription): set CHATWOOT_IMAGE to the Harbor image AND COMPOSE_PROFILES=pro
-#     (adds the Baileys WhatsApp provider). Requires `docker login harbor.fazer.ai` with the
-#     license registry credential (hub: generate_install_script).
+#   - OSS (no hub subscription): defaults, our public `ghcr.io/fazer-ai/chatwoot` fork, WITH the
+#     Baileys WhatsApp provider (public `baileys-api` image, so OSS needs no Harbor login).
+#   - Pro (hub subscription): set CHATWOOT_IMAGE to the Harbor image (adds Kanban + other Pro
+#     features). Requires `docker login harbor.fazer.ai` with the license registry credential
+#     (hub: generate_install_script). Baileys ships in BOTH editions.
 #
 # Secrets come from a .env you fill in (see ./.env.example); Coolify generates those automatically,
 # so it has its own file (./docker-compose.coolify.yml). TLS + reverse proxy are EXTERNAL: this stack
@@ -12,8 +13,8 @@
 # (the fazer.ai agents bundled Caddy can front chatwoot.<domain> at it; see the agents-onboarding skill).
 #
 #   cp .env.example .env   # fill every CHANGE_ME, then:
-#   docker compose up -d                         # OSS
-#   COMPOSE_PROFILES=pro docker compose up -d     # Pro (after the Harbor login)
+#   docker compose up -d   # OSS (Baileys included). For Pro: docker login harbor.fazer.ai, then set
+#                          # CHATWOOT_IMAGE to the chatwoot-pro image and run docker compose up -d.
 
 x-chatwoot-env: &chatwoot-env
   NODE_ENV: production
@@ -31,7 +32,7 @@ x-chatwoot-env: &chatwoot-env
   SECRET_KEY_BASE: '${SECRET_KEY_BASE}'
   REDIS_URL: 'redis://redis:6379'
   REDIS_PASSWORD: '${REDIS_PASSWORD}'
-  # Pro-only (Baileys WhatsApp): harmless on OSS (no Baileys inbox can be created there).
+  # Baileys WhatsApp provider config (BOTH editions — the baileys-api service below runs in both).
   BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME: '${BAILEYS_CLIENT_NAME:-Chatwoot}'
   BAILEYS_PROVIDER_DEFAULT_URL: 'http://baileys-api:3025'
   BAILEYS_PROVIDER_DEFAULT_API_KEY: '${BAILEYS_DEFAULT_API_KEY:-}'
@@ -110,10 +111,9 @@ services:
       timeout: 20s
       retries: 10
 
-  # Pro only: the Baileys WhatsApp provider. Starts ONLY with COMPOSE_PROFILES=pro.
+  # The Baileys WhatsApp provider (BOTH editions). Public image, so OSS needs no Harbor login.
   baileys-api:
     image: '${BAILEYS_IMAGE:-ghcr.io/fazer-ai/baileys-api:latest}'
-    profiles: ['pro']
     pull_policy: always
     volumes:
       - 'storage:/app/storage'
