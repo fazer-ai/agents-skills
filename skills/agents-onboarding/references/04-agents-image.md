@@ -6,7 +6,7 @@
 
 Leia `~/.fazer-ai/onboarding.json` → `edition` (`free` | `pro`; ausente = `free`). É a escolha **explícita** do CLI; respeite-a. Eixo **independente** do `chatwootTier` (etapa 3).
 
-- **`free`** → imagem **pública** (default do compose). **Sem** `docker login`, não seta `AGENTS_IMAGE`. (Hoje o default é o placeholder `ghcr.io/fazer-ai/agents:latest`; a imagem pública Free ainda não foi publicada.)
+- **`free`** → imagem **pública** `ghcr.io/fazer-ai/agents:latest` (default do compose, multi-arch amd64/arm64). **Sem** `docker login`, não seta `AGENTS_IMAGE`.
 - **`pro`** → imagem **privada** no Harbor: `harbor.fazer.ai/agents/fazer-ai/agents-pro:latest`. Provisione a credencial **per-user** pelo **proxy do CLI** (`bunx @fazer-ai/agents hub registry-credential --apply --out harbor.secret`, robot per-user, grava o secret `0600` e imprime só o `username`), logue com `scripts/harbor-login.py login` (secret via `--secret-file harbor.secret`; protege o `$` do robot), e setar `AGENTS_IMAGE` pra esse path. **Nunca** logar o secret.
   - **Reuso (per-user):** se o Chatwoot também for Pro (etapa 3), é o **mesmo** `docker login`, não logar duas vezes.
   - **Tier A (Coolify):** setar a env `AGENTS_IMAGE` no serviço + registrar a Harbor registry credential no Coolify (igual ao Chatwoot Pro).
