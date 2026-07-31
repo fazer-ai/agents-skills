@@ -13,7 +13,7 @@ O `/setup` cria **um** tenant a partir do `companyName` que quem preenche o form
 - é `fazer.ai agents` (ou o que o usuário digitou) → siga.
 - divergiu do esperado → **NÃO crie outro tenant** (`tenant_create` é proibido, ver abaixo): siga com o que existe e **avise o usuário** da divergência. Renomear, se ele quiser, é `tenant_update` (não um tenant novo).
 
-## Conectar o MCP do fazer.ai agents (OAuth). GATE: sem as tools, PARE, não contorne
+## Conectar o MCP do fazer.ai agents (OAuth). GATE (daqui em diante): sem as tools, PARE, não contorne
 
 Toda a config do fazer.ai agents (import do agente, vault, tenant-settings, KB, deployment/bind) é **exclusivamente via MCP tools**: elas carregam dry-run + audit + o fence de tenant. As tools de MCP só carregam no **boot** da sessão, e a **ordem do reinício muda por harness**: o Claude autentica na TUI (`/mcp`), que exige o server já carregado no boot, então reinicia **antes** de autenticar; Codex/Hermes autenticam por comando de CLI, então reiniciam **depois**. Endpoint MCP do fazer.ai agents: **`https://agents.<seu-dominio>/api/v1/mcp`** — use o path completo `/api/v1/mcp`. A raiz `https://agents.<seu-dominio>` ou um `.../mcp` sem o `/api/v1` cai na SPA e o login OAuth falha com `invalid_target` (o servidor liga o token ao recurso canônico `.../api/v1/mcp`). Discovery em `docs/mcp.md`.
 
@@ -33,7 +33,7 @@ Toda a config do fazer.ai agents (import do agente, vault, tenant-settings, KB, 
 
 O access token fica no store de MCP do harness, não conosco (`guardrails.md`).
 
-**GATE DURO. Se as tools `fazer-ai` (`whoami`, `tenant_list`, `agent_import`, …) NÃO estão expostas nesta sessão:**
+**GATE DURO (escopo temporal: vale a partir DESTA etapa, com o add+login acima já feitos — antes da etapa 6 a ausência das tools é o estado normal e não aciona este gate). Se as tools `fazer-ai` (`whoami`, `tenant_list`, `agent_import`, …) NÃO estão expostas nesta sessão:**
 
 - **PARE e peça ao usuário pra completar o passo do harness dele** (Claude: **reiniciar → `/mcp` Authenticate**; Codex/Hermes: **`mcp login` → reiniciar**), confirmando o Authenticate/login **e** o reinício. Espere ele voltar. Esse é o **único** caminho.
 - **NUNCA contorne.** É **proibido**, para qualquer config do fazer.ai agents: chamar a **API REST direto** (mintar API key, cookie + `x-tenant-id`); fazer requisições ao endpoint `/api/v1/mcp` **por fora do harness**; **ler o código-fonte/bundle do fazer.ai agents** (`/app/src`, `/app/dist`) pra descobrir endpoints internos; montar **OAuth manual**. Esses bypasses pulam dry-run/audit/fence, são frágeis, e **não provam o MCP**, que é o produto que esta run existe pra validar.
