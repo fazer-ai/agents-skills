@@ -84,6 +84,10 @@ services:
       # First-run: disable the /setup token in this trusted, TLS-fronted onboarding window (the
       # advisory lock still caps /setup at one admin). Set to `true` to require it.
       - SETUP_TOKEN_REQUIRED=${SETUP_TOKEN_REQUIRED:-false}
+      # MCP Dynamic Client Registration, so the operator's AI agent (Claude Code / Codex) can log in
+      # to THIS instance's MCP. Also the app default — pinned here so the stack works on an older
+      # image too, since without it both clients abort before any login screen (docs/mcp.md).
+      - MCP_DCR_ENABLED=${MCP_DCR_ENABLED:-true}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
