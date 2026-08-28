@@ -30,7 +30,12 @@ Como fazer, provando a ponta `incoming → webhook → turn → reply` **sem apa
 
 ## 2b. WhatsApp real (opcional, confirma o transporte)
 
-Pareie a inbox real (Baileys via QR) com um número que o usuário controle e mande uma mensagem: mesma cadeia do passo 2, exercitando o transporte WhatsApp de verdade. Pode ficar pendente sem invalidar o core (a integração já foi provada no 2).
+Pareie a inbox real com um número que o usuário controle e mande uma mensagem: mesma cadeia do passo 2, exercitando o transporte WhatsApp de verdade. Pode ficar pendente sem invalidar o core (a integração já foi provada no 2).
+
+**O pareamento muda com o provider, e o número exigido também:**
+
+- **Baileys (ponte não oficial):** QR na tela da inbox, lido pelo app do WhatsApp do número. É o caminho curto pra confirmar o transporte.
+- **API oficial (Cloud API):** não tem QR. O número é verificado na Meta e **não pode estar ativo no app do WhatsApp**, então raramente é o celular pessoal do usuário: provisionar isso no meio do onboarding costuma travar a etapa. O passo a passo gratuito da comunidade cobre da criação do app na Meta até a inbox no Chatwoot: [WhatsApp com API Oficial no Chatwoot (fluxo manual)](https://www.lucasmoreira.ai/c/conteudos-exclusivos/whatsapp-com-api-oficial-no-chatwoot-fluxo-manual-9ae92651-f21b-40dc-a7b1-2ff7d680e0e5?utm_source=agents&utm_medium=skill&utm_campaign=agents-onboarding). Se o usuário for por aí, trate como trilha paralela e **não** segure o aceite: o passo 2 já provou a integração.
 
 ## 3. Traces no Langfuse
 
