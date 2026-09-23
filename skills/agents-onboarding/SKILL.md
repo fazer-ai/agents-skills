@@ -1,6 +1,6 @@
 ---
 name: agents-onboarding
-description: "Conduz a jornada de onboarding 'do zero ao agente de atendimento' do fazer.ai agents num VPS, escolhendo o orquestrador de deploy (Tier A Coolify, B Portainer, C compose genérico para VM crua ou qualquer painel). Provisiona DNS/SSH pelo MCP Hostinger, faz deploy de Chatwoot + fazer.ai agents + Langfuse com TLS, roda o /setup e importa o agente via MCP, pluga o Agent Bot do Chatwoot e valida ponta a ponta (playground + WhatsApp + traces no Langfuse). Também conduz a migração de uma Secretária v3 (n8n) para a V4, lendo os workflows e convertendo o agente. Use quando o usuário quiser subir/onboardar uma instância nova do fazer.ai agents num VPS, em qualquer um desses orquestradores, ou quando já rodar a Secretária v3 e quiser migrar."
+description: "Conduz a jornada de onboarding 'do zero ao agente de atendimento' do fazer.ai agents num VPS, escolhendo o orquestrador de deploy (Tier A Coolify, B Portainer, C compose genérico para VM crua ou qualquer painel). Provisiona DNS/SSH pelo MCP Hostinger, faz deploy de Chatwoot + fazer.ai agents + Langfuse com TLS, roda o /setup e importa o agente via MCP, pluga o Agent Bot do Chatwoot e valida ponta a ponta (playground + WhatsApp + traces no Langfuse). Também conduz a migração de uma Secretária v3 (n8n) para a V4, lendo os workflows e convertendo o agente. Use quando o usuário quiser subir/onboardar uma instância nova do fazer.ai agents num VPS, em qualquer um desses orquestradores, quando já rodar a Secretária v3 e quiser migrar, ou quando quiser revalidar a infraestrutura de uma instância que já está no ar."
 ---
 
 # Onboarding fazer.ai agents: do zero ao agente (multi-plataforma)
@@ -62,6 +62,8 @@ Abra a referência da etapa **antes** de executá-la (carga sob demanda). O flux
 
 - **Tier B** (Portainer): [`references/deploy-b-portainer.md`](references/deploy-b-portainer.md)
 - **Tier C** (compose genérico, VM crua ou qualquer painel): [`references/deploy-c-compose.md`](references/deploy-c-compose.md)
+
+**Revalidar uma instância que já está no ar** (o usuário quer conferir a instalação, ou algo de infraestrutura quebrou depois dela) não é outra jornada: rode só a sondagem da [1b](references/01b-brownfield.md), a checagem do Coolify no próprio host da [etapa 2](references/02-coolify.md) (Tier A) e a [10](references/10-validate-e2e.md). A instância atende clientes: qualquer conserto, inclusive o `heal-localhost`, só com OK do usuário.
 
 ## Gates de conta (o usuário cria cada admin)
 
